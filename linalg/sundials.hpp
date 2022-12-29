@@ -32,13 +32,18 @@
 #if defined(MFEM_USE_CUDA) && ((SUNDIALS_VERSION_MAJOR == 5) && (SUNDIALS_VERSION_MINOR < 4))
 #error MFEM requires SUNDIALS version 5.4.0 or newer when MFEM_USE_CUDA=TRUE!
 #endif
+#if defined(MFEM_USE_HIP) && ((SUNDIALS_VERSION_MAJOR == 5) && (SUNDIALS_VERSION_MINOR < 7))
+#error MFEM requires SUNDIALS version 5.7.0 or newer when MFEM_USE_HIP=TRUE!
+#endif
 #include <sundials/sundials_matrix.h>
 #include <sundials/sundials_linearsolver.h>
 #include <arkode/arkode_arkstep.h>
 #include <cvodes/cvodes.h>
 #include <kinsol/kinsol.h>
-#ifdef MFEM_USE_CUDA
+#if defined(MFEM_USE_CUDA)
 #include <sunmemory/sunmemory_cuda.h>
+#elif defined(MFEM_USE_HIP)
+#include <sunmemory/sunmemory_hip.h>
 #endif
 
 #include <functional>
@@ -62,7 +67,7 @@ using SUNContext = void*;
 namespace mfem
 {
 
-#ifdef MFEM_USE_CUDA
+#if defined(MFEM_USE_CUDA) || defined(MFEM_USE_HIP)
 
 // ---------------------------------------------------------------------------
 // SUNMemory interface class (used when CUDA is enabled)
@@ -300,7 +305,7 @@ public:
    static N_Vector MakeNVector(MPI_Comm comm, bool use_device);
 #endif
 
-#ifdef MFEM_USE_CUDA
+#if defined(MFEM_USE_CUDA) || defined(MFEM_USE_HIP)
    static bool UseManagedMemory()
    {
       return Device::GetDeviceMemoryType() == MemoryType::MANAGED;
