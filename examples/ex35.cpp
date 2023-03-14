@@ -211,6 +211,7 @@ int main(int argc, char *argv[]) {
   double rho_min = 1e-6;
   double lambda = 1.0;
   double mu = 1.0;
+  double psi_maxval = 100;
 
   OptionsParser args(argc, argv);
   args.AddOption(&ref_levels, "-r", "--refine",
@@ -439,10 +440,10 @@ int main(int argc, char *argv[]) {
     // }
     grad *= alpha;
     psi -= grad;
+    cutoff(psi, psi_maxval);
     projit(psi, rho, mass_fraction * domain_volume);
     cout << "psi in (" << psi.Min() << ", " << psi.Max() << ")" << endl;
     // if (log(psi.Min() <
-    cutoff(psi, psi_maxval);
     // projit(rho, c0, vol_form, mass_fraction);
 
     GridFunctionCoefficient tmp(&psi_old);
