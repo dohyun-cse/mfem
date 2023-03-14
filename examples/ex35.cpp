@@ -305,9 +305,9 @@ int main(int argc, char *argv[]) {
   BilinearForm mass(&control_fes);
   mass.AddDomainIntegrator(new InverseIntegrator(new MassIntegrator(one)));
   mass.Assemble();
-  SparseMatrix M;
-  Array<int> empty;
-  mass.FormSystemMatrix(empty, M);
+  // SparseMatrix M;
+  // Array<int> empty;
+  // mass.FormSystemMatrix(empty, M);
 
   // 8. Define the Lagrange multiplier and gradient functions
   GridFunction grad(&control_fes);
@@ -387,7 +387,7 @@ int main(int argc, char *argv[]) {
     LinearForm w_rhs(&control_fes);
     w_rhs.AddDomainIntegrator(new DomainLFIntegrator(w_cf));
     w_rhs.Assemble();
-    M.Mult(w_rhs, grad);
+    mass.Mult(w_rhs, grad);
 
     // Step 5 - Update design variable ρ ← projit(sigmoid(linit(ρ) - αG))
     for (int i = 0; i < rho.Size(); i++) {
