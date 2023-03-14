@@ -89,38 +89,6 @@ void projit(GridFunction &psi, SigmoidCoefficient &rho,
   }
 }
 
-/**
- * @brief Nonlinear projection of 0 < τ < 1 onto the subspace
- *        ∫_Ω τ dx = θ vol(Ω) as follows.
- *
- *        1. Compute the root of the R → R function
- *            f(c) = ∫_Ω sigmoid(inv_sigmoid(τ) + c) dx - θ vol(Ω)
- *        2. Set τ ← sigmoid(inv_sigmoid(τ) + c).
- *
- */
-void projit(GridFunction &tau, double &c, LinearForm &vol_form,
-            double volume_fraction, double tol = 1e-12, int max_its = 10) {
-  GridFunction ftmp(tau.FESpace());
-  GridFunction dftmp(tau.FESpace());
-  for (int k = 0; k < max_its; k++) {
-    // Compute f(c) and dfdc(c)
-    for (int i = 0; i < tau.Size(); i++) {
-      ftmp[i] = sigmoid(inv_sigmoid(tau[i]) + c) - volume_fraction;
-      dftmp[i] = dsigmoiddx(inv_sigmoid(tau[i]) + c);
-    }
-    double f = vol_form(ftmp);
-    double df = vol_form(dftmp);
-
-    double dc = -f / df;
-    c += dc;
-    if (abs(dc) < tol) {
-      break;
-    }
-  }
-  tau = ftmp;
-  tau += volume_fraction;
-}
-
 using namespace std;
 using namespace mfem;
 /**
