@@ -275,10 +275,9 @@ int main(int argc, char *argv[]) {
   }
 
   // 4. Define the necessary finite element spaces on the mesh.
-  H1_FECollection state_fec(order, dim);       // space for u
-  H1_FECollection filter_fec(order - 1, dim);  // space for ρ̃
-  L2_FECollection control_fec(order - 1, dim,
-                              BasisType::Positive);  // space for ρ
+  H1_FECollection state_fec(order, dim);        // space for u
+  H1_FECollection filter_fec(order - 1, dim);   // space for ρ̃
+  L2_FECollection control_fec(order - 1, dim);  // space for ρ
   FiniteElementSpace state_fes(&mesh, &state_fec, dim);
   FiniteElementSpace filter_fes(&mesh, &filter_fec);
   FiniteElementSpace control_fes(&mesh, &control_fec);
