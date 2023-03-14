@@ -291,13 +291,15 @@ int main(int argc, char *argv[]) {
 
   // 5. Set the initial guess for ρ.
   GridFunction u(&state_fes);
-  GridFunction rho(&control_fes);
-  GridFunction rho_old(&control_fes);
+  GridFunction psi(&control_fes);
+  GridFunction psi_old(&control_fes);
   GridFunction rho_filter(&filter_fes);
   u = 0.0;
   rho_filter = 0.0;
-  rho = 0.5;
-  rho_old = 0.5;
+  psi = inv_sigmoid(mass_fraction);
+  psi_old = inv_sigmoid(mass_fraction);
+
+  SigmoidCoefficient rho(&psi);
 
   // 6. Set-up the physics solver.
   int maxat = mesh.bdr_attributes.Max();
@@ -352,10 +354,13 @@ int main(int argc, char *argv[]) {
   ConstantCoefficient zero(0.0);
   GridFunction onegf(&control_fes);
   onegf = 1.0;
-  LinearForm vol_form(&control_fes);
-  vol_form.AddDomainIntegrator(new DomainLFIntegrator(one));
-  vol_form.Assemble();
-  double domain_volume = vol_form(onegf);
+  // LinearForm vol_form(&control_fes);
+  // vol_form.AddDomainIntegrator(new DomainLFIntegrator(one));
+  // vol_form.Assemble();
+  double domain_volume = 0.0;
+  for (int i = 0; i < mesh.GetNE(); i++) {
+    domain_volume += mesh.GetElementVolume(i);
+  }
 
   // 10. Connect to GLVis. Prepare for VisIt output.
   char vishost[] = "localhost";
@@ -370,20 +375,24 @@ int main(int argc, char *argv[]) {
     sout_r.precision(8);
   }
 
-  mfem::ParaViewDataCollection paraview_dc("Elastic_compliance", &mesh);
-  paraview_dc.SetPrefixPath("ParaView");
-  paraview_dc.SetLevelsOfDetail(order);
-  paraview_dc.SetCycle(0);
-  paraview_dc.SetDataFormat(VTKFormat::BINARY);
-  paraview_dc.SetHighOrderOutput(true);
-  paraview_dc.SetTime(0.0);
-  paraview_dc.RegisterField("displacement", &u);
-  paraview_dc.RegisterField("density", &rho);
-  paraview_dc.RegisterField("filtered_density", &rho_filter);
+  // mfem::ParaViewDataCollection paraview_dc("Elastic_compliance", &mesh);
+  // paraview_dc.SetPrefixPath("ParaView");
+  // paraview_dc.SetLevelsOfDetail(order);
+  // paraview_dc.SetCycle(0);
+  // paraview_dc.SetDataFormat(VTKFormat::BINARY);
+  // paraview_dc.SetHighOrderOutput(true);
+  // paraview_dc.SetTime(0.0);
+  // paraview_dc.RegisterField("displacement", &u);
+  // paraview_dc.RegisterField("density", &rho);
+  // paraview_dc.RegisterField("filtered_density", &rho_filter);
 
   // 11. Iterate
   int step = 0;
   double c0 = 0.0;
+
+  LinearForm int_rho(&control_fes);
+  int_rho.AddDomainIntegrator(new DomainLFIntegrator(rho));
+
   for (int k = 1; k < max_it; k++) {
     if (k > 1) {
       alpha *= ((double)k) / ((double)k - 1);
@@ -394,8 +403,8 @@ int main(int argc, char *argv[]) {
 
     // Step 1 - Filter solve
     // Solve (ϵ^2 ∇ ρ̃, ∇ v ) + (ρ̃,v) = (ρ,v)
-    GridFunctionCoefficient rho_cf(&rho);
-    FilterSolver->SetRHSCoefficient(&rho_cf);
+    // GridFunctionCoefficient psi_cf(&psi);
+    FilterSolver->SetRHSCoefficient(&rho);
     FilterSolver->Solve();
     rho_filter = *FilterSolver->GetFEMSolution();
 
@@ -425,17 +434,25 @@ int main(int argc, char *argv[]) {
     mass.Mult(w_rhs, grad);
 
     // Step 5 - Update design variable ρ ← projit(sigmoid(linit(ρ) - αG))
-    for (int i = 0; i < rho.Size(); i++) {
-      rho[i] = sigmoid(inv_sigmoid(rho[i]) - alpha * grad[i]);
-    }
-    projit(rho, c0, vol_form, mass_fraction);
+    // for (int i = 0; i < rho.Size(); i++) {
+    //   rho[i] = sigmoid(inv_sigmoid(rho[i]) - alpha * grad[i]);
+    // }
+    grad *= alpha;
+    psi -= grad;
+    projit(psi, rho, mass_fraction * domain_volume);
+    cout << "psi in (" << psi.Min() << ", " << psi.Max() << ")" << endl;
+    // if (log(psi.Min() <
+    cutoff(psi, psi_maxval);
+    // projit(rho, c0, vol_form, mass_fraction);
 
-    GridFunctionCoefficient tmp(&rho_old);
-    double norm_reduced_gradient = rho.ComputeL2Error(tmp) / alpha;
-    rho_old = rho;
+    GridFunctionCoefficient tmp(&psi_old);
+    double norm_reduced_gradient = psi.ComputeL2Error(tmp) / alpha;
+    psi_old = psi;
 
     double compliance = (*(ElasticitySolver->GetLinearForm()))(u);
-    double material_volume = vol_form(rho);
+    int_rho.Assemble();
+    double material_volume = int_rho(onegf);
+    // double material_volume = vol_form(rho);
     mfem::out << "norm of reduced gradient = " << norm_reduced_gradient << endl;
     mfem::out << "compliance = " << compliance << endl;
     mfem::out << "mass_fraction = " << material_volume / domain_volume << endl;
@@ -444,17 +461,20 @@ int main(int argc, char *argv[]) {
       sout_u << "solution\n"
              << mesh << u << "window_title 'Displacement u'" << flush;
 
+      GridFunction rho_gf(&control_fes);
+      rho_gf.ProjectCoefficient(rho);
       sout_rho << "solution\n"
-               << mesh << rho << "window_title 'Control variable ρ'" << flush;
+               << mesh << rho_gf << "window_title 'Control variable ρ'"
+               << flush;
 
       GridFunction r_gf(&control_fes);
       r_gf.ProjectCoefficient(SIMP_cf);
       sout_r << "solution\n"
              << mesh << r_gf << "window_title 'Design density r(ρ̃)'" << flush;
 
-      paraview_dc.SetCycle(k);
-      paraview_dc.SetTime((double)k);
-      paraview_dc.Save();
+      // paraview_dc.SetCycle(k);
+      // paraview_dc.SetTime((double)k);
+      // paraview_dc.Save();
     }
 
     if (norm_reduced_gradient < tol) {
