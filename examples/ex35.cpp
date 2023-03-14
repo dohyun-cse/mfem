@@ -18,9 +18,9 @@
 //                  subject to
 //
 //                    -Div(r(ρ̃)Cε(u)) = f       in Ω + BCs
-//                    -ϵ²Δρ̃ + ρ̃ = ρ             in Ω + Neumann BCs
+//                    -ϵ²Δρ̃ + ρ̃ = sig(ψ)        in Ω + Neumann BCs
 //                    0 ≤ ρ ≤ 1                 in Ω
-//                    ∫_Ω ρ dx = θ vol(Ω)
+//                    ∫_Ω sig(ψ) dx = θ vol(Ω)
 //
 //              Here, r(ρ̃) = ρ₀ + ρ̃³ (1-ρ₀) is the solid isotropic material
 //              penalization (SIMP) law, C is the elasticity tensor for an
@@ -54,12 +54,23 @@
 
 #include "mfem.hpp"
 
-void cutoff(GridFunction &psi, const double maxval) {
+// Bound ψ = inv_sigmoid(ρ) to prevent blow-up (ρ -> 0 or 1)
+void clip(GridFunction &psi, const double maxval) {
   for (int i = 0; i < psi.Size(); i++) {
     psi[i] = max(min(psi[i], maxval), -maxval);
   }
 }
 
+/**
+ * @brief Shift ψ ↦ ψ + c where c enforces the volume constraint:
+ * ∫_Ω sigmoid(ψ + c) = ∫_Ω ρ = θ vol(Ω)
+ *
+ * @param psi auxiliary variable, inv_sigmoid(ρ)
+ * @param rho density, sigmoid(ψ)
+ * @param target_volume θ vol(Ω)
+ * @param tol Newton iteration tolerance
+ * @param max_its Newton maximum iteration
+ */
 void projit(GridFunction &psi, SigmoidCoefficient &rho,
             const double target_volume, const double tol = 1e-12,
             const int max_its = 10) {
@@ -153,11 +164,13 @@ using namespace mfem;
  *
  *     6. Mirror descent update until convergence; i.e.,
  *
- *                           ψ ← projit(ψ - αG),
+ *                           ψ ← projit(clip(ψ - αG)),
  *
  *     where
  *
  *          α > 0                            (step size parameter)
+ *
+ *          clip: ψ(x) -> ψ̄(x)               (strong bound (-max_val, max_val))
  *
  *     and projit is a (compatible) projection operator ψ ↦ ψ + c,
  *     enforcing the volume constraint ∫_Ω sigmoid(ψ + c) dx = θ vol(Ω).
@@ -245,7 +258,7 @@ int main(int argc, char *argv[]) {
   // 4. Define the necessary finite element spaces on the mesh.
   H1_FECollection state_fec(order, dim);        // space for u
   H1_FECollection filter_fec(order - 1, dim);   // space for ρ̃
-  L2_FECollection control_fec(order - 1, dim);  // space for ρ
+  L2_FECollection control_fec(order - 1, dim);  // space for ψ
   FiniteElementSpace state_fes(&mesh, &state_fec, dim);
   FiniteElementSpace filter_fes(&mesh, &filter_fec);
   FiniteElementSpace control_fes(&mesh, &control_fec);
@@ -259,15 +272,15 @@ int main(int argc, char *argv[]) {
 
   // 5. Set the initial guess for ρ.
   GridFunction u(&state_fes);
-  GridFunction psi(&control_fes);
-  GridFunction psi_old(&control_fes);
-  GridFunction rho_filter(&filter_fes);
+  GridFunction psi(&control_fes);        // inv_sigmoid(ρ)
+  GridFunction psi_old(&control_fes);    // inv_sigmoid(ρ_old)
+  GridFunction rho_filter(&filter_fes);  // ρ̃
   u = 0.0;
   rho_filter = 0.0;
-  psi = inv_sigmoid(mass_fraction);
+  psi = inv_sigmoid(mass_fraction);  // equivalent to ρ = mass_fraction
   psi_old = inv_sigmoid(mass_fraction);
 
-  SigmoidCoefficient rho(&psi);
+  SigmoidCoefficient rho(&psi);  // ρ = sigmoid(ψ)
 
   // 6. Set-up the physics solver.
   int maxat = mesh.bdr_attributes.Max();
@@ -307,24 +320,20 @@ int main(int argc, char *argv[]) {
   FilterSolver->SetEssentialBoundary(ess_bdr_filter);
   FilterSolver->SetupFEM();
 
-  BilinearForm mass(&control_fes);
-  mass.AddDomainIntegrator(new InverseIntegrator(new MassIntegrator(one)));
-  mass.Assemble();
-  // SparseMatrix M;
-  // Array<int> empty;
-  // mass.FormSystemMatrix(empty, M);
+  BilinearForm inv_mass(&control_fes);
+  inv_mass.AddDomainIntegrator(new InverseIntegrator(new MassIntegrator(one)));
+  inv_mass.Assemble();
 
   // 8. Define the Lagrange multiplier and gradient functions
   GridFunction grad(&control_fes);
   GridFunction w_filter(&filter_fes);
 
   // 9. Define some tools for later
-  ConstantCoefficient zero(0.0);
-  GridFunction onegf(&control_fes);
+
+  ConstantCoefficient zero(0.0);     // zero coefficient
+  GridFunction onegf(&control_fes);  // one grid function
   onegf = 1.0;
-  // LinearForm vol_form(&control_fes);
-  // vol_form.AddDomainIntegrator(new DomainLFIntegrator(one));
-  // vol_form.Assemble();
+
   double domain_volume = 0.0;
   for (int i = 0; i < mesh.GetNE(); i++) {
     domain_volume += mesh.GetElementVolume(i);
@@ -370,7 +379,7 @@ int main(int argc, char *argv[]) {
     cout << "\nStep = " << k << endl;
 
     // Step 1 - Filter solve
-    // Solve (ϵ^2 ∇ ρ̃, ∇ v ) + (ρ̃,v) = (ρ,v)
+    // Solve (ϵ^2 ∇ ρ̃, ∇ v ) + (ρ̃,v) = (ρ,v) = (sigmoid(ψ), v)
     // GridFunctionCoefficient psi_cf(&psi);
     FilterSolver->SetRHSCoefficient(&rho);
     FilterSolver->Solve();
@@ -399,23 +408,28 @@ int main(int argc, char *argv[]) {
     LinearForm w_rhs(&control_fes);
     w_rhs.AddDomainIntegrator(new DomainLFIntegrator(w_cf));
     w_rhs.Assemble();
-    mass.Mult(w_rhs, grad);
+    inv_mass.Mult(w_rhs, grad);
 
-    // Step 5 - Update design variable ρ ← projit(sigmoid(linit(ρ) - αG))
-    // for (int i = 0; i < rho.Size(); i++) {
-    //   rho[i] = sigmoid(inv_sigmoid(rho[i]) - alpha * grad[i]);
-    // }
+    // Step 5 - Update design variable ψ ← projit(clip(ψ - αG))
     grad *= alpha;
     psi -= grad;
-    cutoff(psi, psi_maxval);
+    clip(psi, psi_maxval);
     projit(psi, rho, mass_fraction * domain_volume);
-    cout << "psi in (" << psi.Min() << ", " << psi.Max() << ")" << endl;
-    // if (log(psi.Min() <
-    // projit(rho, c0, vol_form, mass_fraction);
 
-    GridFunctionCoefficient tmp(&psi_old);
-    double norm_reduced_gradient = psi.ComputeL2Error(tmp) / alpha;
-    psi_old = psi;
+    cout << "psi in (" << psi.Min() << ", " << psi.Max() << ")" << endl;
+
+    double norm_reduced_gradient;
+    {
+      GridFunction rho_gf(&control_fes);
+      rho_gf.ProjectCoefficient(rho);
+
+      SigmoidCoefficient rho_old(&psi_old);
+      GridFunction err(&control_fes);
+      err.ProjectCoefficient(rho_old);
+      err -= rho_gf;
+
+      norm_reduced_gradient = err.ComputeL2Error(zero);
+    }
 
     double compliance = (*(ElasticitySolver->GetLinearForm()))(u);
     int_rho.Assemble();

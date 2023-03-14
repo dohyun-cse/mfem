@@ -32,7 +32,7 @@ double dsigmoiddx(double x) {
 }
 
 /**
- * @brief Sigmoid of a grid function, ρ ↦ sigmoid(ρ)
+ * @brief Sigmoid of a grid function, ψ ↦ sigmoid(ψ) = ρ
  *
  */
 class SigmoidCoefficient : public Coefficient {
@@ -47,7 +47,8 @@ class SigmoidCoefficient : public Coefficient {
 };
 
 /**
- * @brief Sigmoid of a grid function, ρ ↦ sigmoid(ρ)
+ * @brief Derivative of Sigmoid of a grid function, ψ ↦ d(sigmoid(ψ))/dψ 
+ * @a ./ex35.cpp::projit
  *
  */
 class DerSigmoidCoefficient : public Coefficient {
