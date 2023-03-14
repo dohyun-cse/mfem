@@ -10,13 +10,14 @@
 using namespace std;
 using namespace mfem;
 
-// Convenience functions
+// Inverse of sigmoid function
 double inv_sigmoid(double x) {
   double tol = 1e-12;
   x = min(max(tol, x), 1.0 - tol);
   return log(x / (1.0 - x));
 }
 
+// sigmoid function
 double sigmoid(double x) {
   if (x >= 0) {
     return 1.0 / (1.0 + exp(-x));
@@ -24,13 +25,32 @@ double sigmoid(double x) {
     return exp(x) / (1.0 + exp(x));
   }
 }
-
+// derivative of sigmoid function
 double dsigmoiddx(double x) {
   double tmp = sigmoid(-x);
   return tmp - pow(tmp, 2);
 }
 
-// TODO: Description
+/**
+ * @brief Sigmoid of a grid function, ρ ↦ sigmoid(ρ)
+ *
+ */
+class SigmoidCoefficient : public Coefficient {
+ protected:
+  GridFunction *rho;
+
+ public:
+  SigmoidCoefficient(GridFunction *rho_) : rho(rho_) {}
+  virtual double Eval(ElementTransformation &T, const IntegrationPoint &ip) {
+    return sigmoid(rho->GetValue(T, ip));
+  }
+};
+
+/**
+ * @brief r(ρ̃) in SIMP, r : ρ̃ ↦ ρₘᵢₙ + (ρₘₐₓ-ρₘᵢₙ)ρ̃ᵖ
+ * where ρₘᵢₙ, ρₘₐₓ are the min/max value, and p is the exponent
+ *
+ */
 class SIMPCoefficient : public Coefficient {
  protected:
   GridFunction *rho_filter;  // grid function
@@ -47,9 +67,8 @@ class SIMPCoefficient : public Coefficient {
         exponent(exponent_) {}
 
   virtual double Eval(ElementTransformation &T, const IntegrationPoint &ip) {
-    double val = rho_filter->GetValue(T, ip);
-    double coeff = min_val + pow(val, exponent) * (max_val - min_val);
-    return coeff;
+    return min_val +
+           pow(rho_filter->GetValue(T, ip), exponent) * (max_val - min_val);
   }
 };
 
