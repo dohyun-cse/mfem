@@ -47,6 +47,21 @@ class SigmoidCoefficient : public Coefficient {
 };
 
 /**
+ * @brief Sigmoid of a grid function, ρ ↦ sigmoid(ρ)
+ *
+ */
+class DerSigmoidCoefficient : public Coefficient {
+ protected:
+  GridFunction *rho;
+
+ public:
+  DerSigmoidCoefficient(GridFunction *rho_) : rho(rho_) {}
+  virtual double Eval(ElementTransformation &T, const IntegrationPoint &ip) {
+    return dsigmoiddx(rho->GetValue(T, ip));
+  }
+};
+
+/**
  * @brief r(ρ̃) in SIMP, r : ρ̃ ↦ ρₘᵢₙ + (ρₘₐₓ-ρₘᵢₙ)ρ̃ᵖ
  * where ρₘᵢₙ, ρₘₐₓ are the min/max value, and p is the exponent
  *
