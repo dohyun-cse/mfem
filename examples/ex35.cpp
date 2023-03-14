@@ -111,7 +111,7 @@ using namespace mfem;
  *  Discretization choices:
  *
  *     u ∈ V ⊂ (H¹)ᵈ (order p)
- *     ρ ∈ L² (order p - 1)
+ *     ψ ∈ L² (order p - 1) : Inverse sigmoid of ρ
  *     ρ̃ ∈ H¹ (order p - 1)
  *     w ∈ V  (order p)
  *     w̃ ∈ H¹ (order p - 1)
@@ -122,13 +122,13 @@ using namespace mfem;
  *
  *  Update ρ with projected mirror descent via the following algorithm.
  *
- *  1. Initialize density field 0 < ρ(x) < 1.
+ *  1. Initialize inverse sigmoid density field ψ = inv_sigmoid(ρ).
  *
  *  While not converged:
  *
  *     2. Solve filter equation ∂_w̃ L = 0; i.e.,
  *
- *           (ϵ² ∇ ρ̃, ∇ v ) + (ρ̃,v) = (ρ,v)   ∀ v ∈ H¹.
+ *           (ϵ² ∇ ρ̃, ∇ v ) + (ρ̃,v) = (sigmoid(ψ),v)   ∀ v ∈ H¹.
  *
  *     3. Solve primal problem ∂_w L = 0; i.e.,
  *
@@ -150,18 +150,14 @@ using namespace mfem;
  *
  *     6. Mirror descent update until convergence; i.e.,
  *
- *                      ρ ← projit(sigmoid(linit(ρ) - αG)),
+ *                           ψ ← projit(ψ - αG),
  *
  *     where
  *
  *          α > 0                            (step size parameter)
  *
- *          sigmoid(x) = eˣ/(1+eˣ)             (sigmoid)
- *
- *          linit(y) = ln(y) - ln(1-y)       (inverse of sigmoid)
- *
- *     and projit is a (compatible) projection operator enforcing ∫_Ω ρ dx = θ
- * vol(Ω).
+ *     and projit is a (compatible) projection operator ψ ↦ ψ + c,
+ *     enforcing the volume constraint ∫_Ω sigmoid(ψ + c) dx = θ vol(Ω).
  *
  *  end
  *
