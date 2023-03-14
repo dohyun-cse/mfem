@@ -54,6 +54,41 @@
 
 #include "mfem.hpp"
 
+void cutoff(GridFunction &psi, const double maxval) {
+  for (int i = 0; i < psi.Size(); i++) {
+    psi[i] = max(min(psi[i], maxval), -maxval);
+  }
+}
+
+void projit(GridFunction &psi, SigmoidCoefficient &rho,
+            const double target_volume, const double tol = 1e-12,
+            const int max_its = 10) {
+  LinearForm int_rho(psi.FESpace());
+  int_rho.AddDomainIntegrator(new DomainLFIntegrator(rho));
+
+  DerSigmoidCoefficient drho(&psi);
+  LinearForm int_drho(psi.FESpace());
+  int_drho.AddDomainIntegrator(new DomainLFIntegrator(drho));
+
+  GridFunction one(psi.FESpace());
+  one = 1.0;
+
+  for (int k = 0; k < max_its; k++) {
+    int_rho.Assemble();
+    int_drho.Assemble();
+
+    const double f = int_rho(one) - target_volume;
+    const double df = int_drho(one);
+    cout << k << ": (" << f << ", " << df << ")" << endl;
+
+    const double dc = -f / df;
+    psi += dc;
+    if (abs(dc) < tol) {
+      break;
+    }
+  }
+}
+
 /**
  * @brief Nonlinear projection of 0 < τ < 1 onto the subspace
  *        ∫_Ω τ dx = θ vol(Ω) as follows.
