@@ -429,6 +429,7 @@ int main(int argc, char *argv[]) {
       err -= rho_gf;
 
       norm_reduced_gradient = err.ComputeL2Error(zero);
+      psi_old = psi;
     }
 
     double compliance = (*(ElasticitySolver->GetLinearForm()))(u);
