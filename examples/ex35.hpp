@@ -12,9 +12,9 @@ using namespace mfem;
 
 // Inverse of sigmoid function
 double inv_sigmoid(double x) {
-  double tol = 1e-12;
-  x = min(max(tol, x), 1.0 - tol);
-  return log(x / (1.0 - x));
+  // double tol = 1e-12;
+  // x = min(max(tol, x), 1.0 - tol);
+  return log(max(x / (1.0 - x), 1.e-12));
 }
 
 // sigmoid function
@@ -97,17 +97,19 @@ class StrainEnergyDensityCoefficient : public Coefficient {
   DenseMatrix grad;                    // auxiliary matrix, used in Eval
   double exponent;
   double rho_min;
+  double rho_max;
 
  public:
   StrainEnergyDensityCoefficient(Coefficient *lambda_, Coefficient *mu_,
                                  GridFunction *u_, GridFunction *rho_filter_,
-                                 double rho_min_ = 1e-6, double exponent_ = 3.0)
+                                 double rho_min_ = 1e-6, double rho_max_ = 1-1e-6, double exponent_ = 3.0)
       : lambda(lambda_),
         mu(mu_),
         u(u_),
         rho_filter(rho_filter_),
         exponent(exponent_),
-        rho_min(rho_min_) {
+        rho_min(rho_min_),
+        rho_max(rho_max_) {
     MFEM_ASSERT(rho_min_ >= 0.0, "rho_min must be >= 0");
     MFEM_ASSERT(rho_min_ < 1.0, "rho_min must be > 1");
     MFEM_ASSERT(u, "displacement field is not set");
@@ -128,7 +130,7 @@ class StrainEnergyDensityCoefficient : public Coefficient {
     }
     double val = rho_filter->GetValue(T, ip);
 
-    return -exponent * pow(val, exponent - 1.0) * (1 - rho_min) * density;
+    return -exponent * pow(val, exponent - 1.0) * (rho_max - rho_min) * density;
   }
 };
 

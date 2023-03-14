@@ -420,7 +420,7 @@ int main(int argc, char *argv[]) {
     // Step 3 - Adjoint filter solve
     // Solve (ϵ² ∇ w̃, ∇ v) + (w̃ ,v) = (-r'(ρ̃) ( λ(ρ̃) |∇⋅u|² + 2 μ(ρ̃) |ε(u)|²),v)
     StrainEnergyDensityCoefficient rhs_cf(&lambda_cf, &mu_cf, &u, &rho_filter,
-                                          rho_min);
+                                          rho_min, 1.0);
     FilterSolver->SetRHSCoefficient(&rhs_cf);
     FilterSolver->Solve();
     w_filter = *FilterSolver->GetFEMSolution();
