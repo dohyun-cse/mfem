@@ -12,8 +12,8 @@ using namespace mfem;
 
 // Inverse of sigmoid function
 double inv_sigmoid(double x) {
-  // double tol = 1e-12;
-  // x = min(max(tol, x), 1.0 - tol);
+  double tol = 1e-12;
+  x = min(max(tol, x), 1.0 - tol);
   return log(max(x / (1.0 - x), 1.e-12));
 }
 
@@ -83,8 +83,9 @@ class SIMPCoefficient : public Coefficient {
         exponent(exponent_) {}
 
   virtual double Eval(ElementTransformation &T, const IntegrationPoint &ip) {
-    return min_val +
-           pow(rho_filter->GetValue(T, ip), exponent) * (max_val - min_val);
+    // return min_val +
+    //        pow(max(rho_filter->GetValue(T, ip), 0.0), exponent) * (max_val - min_val);
+    return max(min_val, min(max_val, pow(rho_filter -> GetValue(T, ip), exponent)));
   }
 };
 
