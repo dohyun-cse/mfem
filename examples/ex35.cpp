@@ -193,6 +193,7 @@ int main(int argc, char *argv[]) {
   double lambda = 1.0;
   double mu = 1.0;
   double psi_maxval = 100;
+  double update_epsilon = 1.e-08;
 
   OptionsParser args(argc, argv);
   args.AddOption(&ref_levels, "-r", "--refine",
@@ -372,7 +373,7 @@ int main(int argc, char *argv[]) {
 
   for (int k = 1; k < max_it; k++) {
     if (k > 1) {
-      alpha *= ((double)k) / ((double)k - 1);
+      alpha *= ((double)k) / (k - 1.0);
     }
     step++;
 
@@ -412,6 +413,7 @@ int main(int argc, char *argv[]) {
 
     // Step 5 - Update design variable ψ ← projit(clip(ψ - αG))
     grad *= alpha;
+    psi *= (1 - alpha * update_epsilon);
     psi -= grad;
     clip(psi, psi_maxval);
     projit(psi, rho, mass_fraction * domain_volume);
