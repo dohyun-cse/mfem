@@ -188,12 +188,13 @@ int main(int argc, char *argv[]) {
   double epsilon = 0.01;
   double mass_fraction = 0.5;
   int max_it = 1e2;
-  double tol = 1e-4;
+  double tol = 1e-6;
   double rho_min = 1e-6;
   double lambda = 1.0;
   double mu = 1.0;
   double psi_maxval = 100;
   double update_epsilon = 1.e-08;
+  int vis_refine_levels = 2;
 
   OptionsParser args(argc, argv);
   args.AddOption(&ref_levels, "-r", "--refine",
@@ -216,6 +217,8 @@ int main(int argc, char *argv[]) {
   args.AddOption(&visualization, "-vis", "--visualization", "-no-vis",
                  "--no-visualization",
                  "Enable or disable GLVis visualization.");
+  args.AddOption(&vis_refine_levels, "-vr", "--visualization-refinement",
+                 "The number of refinement for GLVis visualization.");
   args.Parse();
   if (!args.Good()) {
     args.PrintUsage(cout);
@@ -466,6 +469,32 @@ int main(int argc, char *argv[]) {
       break;
     }
   }
+
+  // Final visualization on a refined mesh
+  for (int i = 0; i < vis_refine_levels; i++) {
+    mesh.UniformRefinement();
+    control_fes.Update();
+    psi.Update();
+    control_fes.UpdatesFinished();
+    mesh.UniformRefinement();
+    control_fes.Update();
+    psi.Update();
+    control_fes.UpdatesFinished();
+  }
+
+  // Make a finite element space
+  // Here, we use Q1 basis function with vertex to prevent overshoot
+  L2_FECollection display_fec(1, 2, BasisType::GaussLobatto);
+  FiniteElementSpace display_fes(&mesh, &display_fec);
+  GridFunction rho_gf(&display_fes);
+  rho_gf.ProjectCoefficient(rho);
+
+  socketstream sout_refine_rho;
+  sout_refine_rho.open(vishost, visport);
+
+  sout_refine_rho << "solution\n"
+                  << mesh << rho_gf
+                  << "window_title 'Control variable ρ - refined'" << flush;
 
   return 0;
 }
