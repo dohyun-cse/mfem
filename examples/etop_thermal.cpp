@@ -124,10 +124,10 @@ using namespace mfem;
  *  Discretization choices:
  *
  *     u ∈ Vh (H¹, order p)
- *     ψ ∈ Dl (L², order p - 1)
- *     ρ̃ ∈ Vl (H¹, order p - 1)
  *     w ∈ Vh (H¹, order p)
+ *     ρ̃ ∈ Vl (H¹, order p - 1)
  *     w̃ ∈ Vl (H¹, order p - 1)
+ *     ψ ∈ Dl (L², order p - 1)
  *
  * ---------------------------------------------------------------
  *                          ALGORITHM
@@ -194,6 +194,7 @@ int main(int argc, char *argv[]) {
   double psi_maxval = 100;
   double update_epsilon = 1.e-08;
   int vis_refine_levels = 2;
+  double exponent = 3.0;
 
   OptionsParser args(argc, argv);
   args.AddOption(&ref_levels, "-r", "--refine",
@@ -289,16 +290,49 @@ int main(int argc, char *argv[]) {
   SigmoidCoefficient rho(&psi);  // ρ = sigmoid(ψ)
   SigmoidCoefficient rho_old(&psi_old);
 
-  LogDiffCoefficient logu_by_uk(&u, &u_old);
-
-  ThermalEnergyCoefficient drdrho_gradu_gradv(&u, &w, &rho_filter, 3, 1.e-12,
-                                              1.0);
 
   int maxat = mesh.bdr_attributes.Max();
   Array<int> ess_bdr(maxat);
   ess_bdr = 0;
   ess_bdr[0] = 1;
-  ConstantCoefficient one(1.0);
+  ConstantCoefficient f(1.0);
+
+
+  // Filter equation related forms
+  ConstantCoefficient epsilon_cf(epsilon);
+  FilterGradientCoefficient drdrho_gradu_gradv(&u, &w, &rho_filter, 3, 1.e-12,
+                                               1.0);
+
+  BilinearForm epsilonDiffusion(&Vh);
+  epsilonDiffusion.AddDomainIntegrator(new DiffusionIntegrator(epsilon_cf));
+  LinearForm filterRHS(&Vh);
+  filterRHS.AddDomainIntegrator(new DomainLFIntegrator(rho));
+  filterRHS.Assemble();
+  LinearForm filterGradientRHS(&Vh);
+  filterGradientRHS.AddDomainIntegrator(
+      new DomainLFIntegrator(drdrho_gradu_gradv));
+  Array<int> empty_int(0);
+  EllipticBilinearSolver epsilonSolver(&epsilonDiffusion, &filterRHS,
+                                       &empty_int);
+  epsilonSolver.AssembleSystem();
+
+  // SIMP related forms
+  SIMPCoefficient r_rho(&rho_filter, rho_min, 1, exponent);
+  LogDiffCoefficient logu_by_uk(&u, &u_old);
+  NegativeCoefficient neg_f(&f);
+  NegativeCoefficient neg_logu_by_uk(&logu_by_uk);
+
+  BilinearForm densityDiffusion(&Vh);
+  densityDiffusion.AddDomainIntegrator(new DiffusionIntegrator(r_rho));
+  LinearForm primalRHS(&Vh); // (f, v)
+  primalRHS.AddDomainIntegrator(new DomainLFIntegrator(f));
+  primalRHS.Assemble();
+  LinearForm dualRHS(&Vh); // - (f, v) - (log(u/u_k), v)
+  dualRHS.AddDomainIntegrator(new DomainLFIntegrator(neg_f));
+  dualRHS.AddDomainIntegrator(new DomainLFIntegrator(neg_logu_by_uk));
+
+  EllipticBilinearSolver epsilonSolver(&densityDiffusion, &primalRHS,
+                                       &ess_tdof_list_neumann);
 
   // // 6. Set-up the physics solver.
   // int maxat = mesh.bdr_attributes.Max();
