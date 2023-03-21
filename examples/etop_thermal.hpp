@@ -179,6 +179,11 @@ class EllipticBilinearSolver {
     b->Assemble();
   }
 
+  inline void setRHS(LinearForm *b_, const bool assemble = false) {
+    b = b_;
+    if (assemble) b->Assemble();
+  };
+
   void Solve(GridFunction *sol) {
     a->FormLinearSystem(*ess_tdof_list, *sol, *b, A, X, B);
 
