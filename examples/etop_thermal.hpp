@@ -111,7 +111,7 @@ class LogDiffCoefficient : public Coefficient {
    */
   LogDiffCoefficient(GridFunction *u_, GridFunction *w_,
                      const double tol = 1.e-12)
-      : u(u_), w(w_), log_tol(tol){};
+      : u(u_), w(w_), log_tol(tol){}
   virtual double Eval(ElementTransformation &T, const IntegrationPoint &ip) {
     const double u_val = max(u->GetValue(T, ip), log_tol);
     const double w_val = max(w->GetValue(T, ip), log_tol);
@@ -119,7 +119,7 @@ class LogDiffCoefficient : public Coefficient {
   }
 };
 
-class ThermalEnergyCoefficient : public Coefficient {
+class FilterGradientCoefficient : public Coefficient {
  private:
   GridFunction *u;
   GridFunction *w;
@@ -132,15 +132,15 @@ class ThermalEnergyCoefficient : public Coefficient {
   Vector grad_w;
 
  public:
-  ThermalEnergyCoefficient(GridFunction *u_, GridFunction *w_,
-                           GridFunction *rho_filter_, const double exponent_,
-                           const double rho_min_, const double rho_max_)
+  FilterGradientCoefficient(GridFunction *u_, GridFunction *w_,
+                            GridFunction *rho_filter_, const double exponent_,
+                            const double rho_min_, const double rho_max_)
       : u(u_),
         w(w_),
         rho_filter(rho_filter_),
         exponent(exponent_),
         rho_min(rho_min),
-        rho_max(rho_max){};
+        rho_max(rho_max){}
   virtual double Eval(ElementTransformation &T, const IntegrationPoint &ip) {
     u->GetGradient(T, grad_u);
     w->GetGradient(T, grad_w);
@@ -149,7 +149,18 @@ class ThermalEnergyCoefficient : public Coefficient {
     const double dr_drho =
         -exponent * (rho_max - rho_min) * pow(rho_val, exponent - 1.0);
     return -dr_drho * energy;
-  };
+  }
+};
+
+class NegativeCoefficient : public Coefficient {
+ private:
+  Coefficient *u;
+
+ public:
+  NegativeCoefficient(Coefficient *u_) : u(u_){}
+  virtual double Eval(ElementTransformation &T, const IntegrationPoint &ip) {
+    return -u->Eval(T, ip);
+  }
 };
 
 class EllipticBilinearSolver {
@@ -182,7 +193,7 @@ class EllipticBilinearSolver {
   inline void setRHS(LinearForm *b_, const bool assemble = false) {
     b = b_;
     if (assemble) b->Assemble();
-  };
+  }
 
   void Solve(GridFunction *sol) {
     a->FormLinearSystem(*ess_tdof_list, *sol, *b, A, X, B);
@@ -216,5 +227,5 @@ class EllipticBilinearSolver {
 
     // 12. Recover the solution as a finite element grid function.
     a->RecoverFEMSolution(X, *b, *sol);
-  };
+  }
 };
