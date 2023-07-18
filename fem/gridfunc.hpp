@@ -854,6 +854,8 @@ public:
 GridFunction *Extrude1DGridFunction(Mesh *mesh, Mesh *mesh2d,
                                     GridFunction *sol, const int ny);
 
+GridFunction* ProlongToMaxOrder(const GridFunction *x, const int fieldtype=1);
+
 } // namespace mfem
 
 #endif
