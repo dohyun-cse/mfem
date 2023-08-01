@@ -371,7 +371,7 @@ int main(int argc, char *argv[])
       mfem::out << "Iteration " << k + 1 << std::endl;
       alpha_k.constant = alpha0*(k+1); // update α_k
       psi_k = psi; // update ψ_k
-      bool newton_converged = false;
+      bool fixedPoint_converged = false;
       for (int j=0; j<maxit_newton; j++) // Newton Iteration
       {
          mfem::out << "\tNewton Iteration " << std::setw(5) << j + 1 << ": " <<
@@ -387,18 +387,19 @@ int main(int argc, char *argv[])
          // NOTE: Newton stopping criteria cannot see this update. Should I consider this update?
          const double current_volume_fraction = VolumeProjection(psi,
                                                                  target_volume) / volume;
-         const double diff_newton = std::sqrt(old_sol.DistanceSquaredTo(
+         const double diff_fixedPoint = std::sqrt(old_sol.DistanceSquaredTo(
                                                  sol) / old_sol.Size());
-         mfem::out << std::scientific << diff_newton << std::endl;
+         mfem::out << std::scientific << diff_fixedPoint << std::endl;
 
-         if (diff_newton < tol_fixedPoint)
+         if (diff_fixedPoint < tol_fixedPoint)
          {
-            newton_converged = true;
+            fixedPoint_converged = true;
             break;
          }
       } // end of Fixed Point iteration
       // newton successive difference
       clip_abs(psi, max_psi);
+      bool newton_converged = false;
       for (int j=0; j<maxit_newton; j++) // Newton Iteration
       {
          mfem::out << "\tNewton Iteration " << std::setw(5) << j + 1 << ": " <<
