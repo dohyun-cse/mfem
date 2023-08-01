@@ -11,7 +11,7 @@
 //
 // L = (f, u) - (r(ρ̃)∇u, ∇λ) + (f, λ)
 //    + (ϵ∇ρ̃, ∇λ̃) + (ρ̃, λ̃) - (ρ, λ̃)
-//    + α(logit(ρ) - logit(ρ_k)
+//    + α(logit(ρ) - logit(ρ_k))
 
 #include "mfem.hpp"
 #include "proximalGalerkin.hpp"
