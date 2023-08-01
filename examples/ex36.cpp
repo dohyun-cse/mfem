@@ -1,15 +1,16 @@
 // Thermal compliance - Fixed Point
 //
 // min (f, u)
-// s.t -∇⋅(r(ρ̃)∇u) = f in Ω = (0, 20) × (0, 20)
-//               u = 0 on Γ = (9, 11) × {y = 20}
-//            n⋅∇u = 0 on ∂Ω \ Γ
-//        -ϵΔρ̃ + ρ̃ = ρ in Ω
-//            n⋅∇ρ̃ = 0 on ∂Ω
-//           0 ≤ ρ ≤ 1 a.e. Ω
+// s.t -∇⋅(r(ρ̃)∇u) = f      in   Ω
+//               u = 0      on   Γ
+//            n⋅∇u = 0      on   ∂Ω \ Γ
+//        -ϵΔρ̃ + ρ̃ = ρ      in   Ω
+//            n⋅∇ρ̃ = 0      on   ∂Ω
+//           0 ≤ ρ ≤ 1      a.e. Ω
+//               u ≤ u_max  a.e. Ω
 //
-// L = (f, u) - (r(ρ̃)∇u, ∇v) + (f, v)
-//    + (ϵ∇ρ̃, ∇λ̃) + (ρ̃, λ̃) - (ρ, λ)
+// L = (f, u) - (r(ρ̃)∇u, ∇λ) + (f, λ)
+//    + (ϵ∇ρ̃, ∇λ̃) + (ρ̃, λ̃) - (ρ, λ̃)
 //    + α(logit(ρ) - logit(ρ_k)
 
 #include "mfem.hpp"
@@ -48,7 +49,7 @@ int main(int argc, char *argv[])
    double max_psi = 1e07;
 
    int maxit_penalty = 10000;
-   int maxit_newton = 1;
+   int maxit_newton = 100;
    double tol_newton = 1e-6;
    double tol_penalty = 1e-6;
 
