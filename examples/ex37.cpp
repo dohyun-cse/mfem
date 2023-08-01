@@ -416,7 +416,6 @@ int main(int argc, char *argv[])
          const double current_volume_fraction = VolumeProjection(psi,
                                                                  target_volume) / volume;
          // newton successive difference
-         clip_abs(psi, max_psi);
          const double diff_newton = std::sqrt(old_sol.DistanceSquaredTo(
                                                  sol) / old_sol.Size());
          mfem::out << std::scientific << diff_newton << std::endl;
@@ -427,6 +426,7 @@ int main(int argc, char *argv[])
             break;
          }
       } // end of Fixed Point iteration
+      clip_abs(psi, max_psi);
       if (!newton_converged)
       {
          mfem::out << "Newton failed to converge" << std::endl;
