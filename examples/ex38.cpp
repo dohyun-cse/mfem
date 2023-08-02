@@ -19,7 +19,7 @@
 #include "proximalGalerkin.hpp"
 
 // Solution variables
-class Vars { public: enum {u, f_rho, psi, f_lam, numVars}; };
+class Vars { public: enum {u, f_rho, psi, varphi, lam, f_lam, numVars}; };
 
 void clip_abs(mfem::Vector &x, const double max_abs_val)
 {
@@ -156,6 +156,9 @@ int main(int argc, char *argv[])
    fes[Vars::f_rho] = &fes_H1_Qk1;
    fes[Vars::psi] = &fes_L2_Qk0;
    fes[Vars::f_lam] = fes[Vars::f_rho];
+   fes[Vars::lam] = fes[Vars::u];
+   fes[Vars::varphi] = &fes_L2_Qk0;
+   
 
    Array<int> offsets = getOffsets(fes);
    BlockVector sol(offsets), delta_sol(offsets);
