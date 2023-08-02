@@ -175,6 +175,21 @@ public:
    }
 };
 
+class MappedCoefficient : public Coefficient
+{
+   typedef std::__1::function<double (const double)> Mapping;
+public:
+   MappedCoefficient(Coefficient *cf, Mapping f_x):coeff(cf), map(f_x) {}
+   virtual double Eval(ElementTransformation &T, const IntegrationPoint &ip)
+   {
+      return map(coeff->Eval(T, ip));
+   }
+   inline void SetMapping(Mapping f_x) {map = f_x; }
+   inline void SetCoefficient(Coefficient *cf) {coeff = cf;}
+private:
+   Coefficient *coeff;
+   Mapping map;
+};
 
 class MappedGridFunctionCoefficient :public GridFunctionCoefficient
 {
