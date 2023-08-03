@@ -1,0 +1,465 @@
+// Thermal compliance with maximum temperature - Fixed Point
+//
+// min (f, u)
+// s.t -∇⋅(r(ρ̃)∇u) = f      in   Ω
+//               u = 0      on   Γ
+//            n⋅∇u = 0      on   ∂Ω \ Γ
+//        -ϵΔρ̃ + ρ̃ = ρ      in   Ω
+//            n⋅∇ρ̃ = 0      on   ∂Ω
+//           0 ≤ ρ ≤ 1      a.e. Ω
+//               u ≤ u_max  a.e. Ω
+//
+// L = (f, u) - (r(ρ̃)∇u, ∇λ) + (f, λ)
+//    + (ϵ∇ρ̃, ∇λ̃) + (ρ̃, λ̃) - (ρ, λ̃)
+//    + (u_max - u, χ) - (exp(φ), χ)
+//    + α(ψ - ψ_k)
+//    + α(φ - φ_k)
+
+#include "mfem.hpp"
+#include "proximalGalerkin.hpp"
+
+// Solution variables
+class Vars { public: enum {u, f_rho, psi, varphi, lam, f_lam, numVars}; };
+
+void clip_abs(mfem::Vector &x, const double max_abs_val)
+{
+   for (auto &val : x) { val = std::min(max_abs_val, std::max(-max_abs_val, val)); }
+}
+
+void clip(mfem::Vector &x, const double min_val, const double max_val)
+{
+   for (auto &val : x) { val = std::min(max_val, std::max(min_val, val)); }
+}
+
+using namespace std;
+using namespace mfem;
+
+
+int main(int argc, char *argv[])
+{
+   // 1. Parse command-line options.
+   int problem = 0;
+   const char *mesh_file = "../data/rect_with_top_fixed.mesh";
+   int ref_levels = 2;
+   int order = 0;
+   const char *device_config = "cpu";
+   bool visualization = true;
+
+   double u_max = 0.1;
+   double alpha0 = 1.0;
+   double epsilon = 1e-04;
+   double rho0 = 1e-6;
+   int simp_exp = 3;
+   double max_psi = 1e07;
+
+   int maxit_penalty = 10000;
+   int maxit_newton = 100;
+   double tol_newton = 1e-6;
+   double tol_penalty = 1e-6;
+
+
+   int precision = 8;
+   cout.precision(precision);
+
+   OptionsParser args(argc, argv);
+   args.AddOption(&mesh_file, "-m", "--mesh",
+                  "Mesh file to use.");
+   args.AddOption(&problem, "-p", "--problem",
+                  "Problem setup to use. See options in velocity_function().");
+   args.AddOption(&ref_levels, "-r", "--refine",
+                  "Number of times to refine the mesh uniformly.");
+   args.AddOption(&order, "-o", "--order",
+                  "Order (degree) of the finite elements.");
+   args.AddOption(&device_config, "-d", "--device",
+                  "Device configuration string, see Device::Configure().");
+   args.AddOption(&visualization, "-vis", "--visualization", "-no-vis",
+                  "--no-visualization",
+                  "Enable or disable GLVis visualization.");
+   args.Parse();
+   if (!args.Good())
+   {
+      args.PrintUsage(cout);
+      return 1;
+   }
+   args.PrintOptions(cout);
+
+   Device device(device_config);
+   device.Print();
+
+   // 2. Input data (mesh, source, ...)
+   Mesh mesh;
+   switch (problem)
+   {
+      case 0:
+         mesh = Mesh::MakeCartesian2D(32, 32, mfem::Element::QUADRILATERAL, false,
+                                      1.0, 1.0);
+         break;
+      case 1:
+         mesh = Mesh(mesh_file);
+         break;
+      default:
+         mfem_error("Undefined Problem");
+   }
+   // Mesh mesh(mesh_file);
+   int dim = mesh.Dimension();
+   const int max_attributes = mesh.bdr_attributes.Max();
+
+   double volume = 0.0;
+   for (int i=0; i<mesh.GetNE(); i++) { volume += mesh.GetElementVolume(i); }
+
+   for (int i=0; i<ref_levels; i++) { mesh.UniformRefinement(); }
+
+   // Essential boundary for each variable (numVar x numAttr)
+   Array2D<int> ess_bdr(Vars::numVars, max_attributes);
+   ess_bdr = 0;
+   switch (problem)
+   {
+      case 0:
+         ess_bdr(Vars::u, 2) = true;
+         ess_bdr(Vars::u, 3) = true;
+         ess_bdr(Vars::lam, 2) = true;
+         ess_bdr(Vars::lam, 3) = true;
+         break;
+      case 1:
+         ess_bdr(Vars::u, 0) = true;
+         ess_bdr(Vars::lam, 0) = true;
+         break;
+   }
+
+   // Source and fixed temperature
+   ConstantCoefficient heat_source(1.0);
+   switch (problem)
+   {
+      case 0:
+         heat_source.constant = 1e-02;
+         break;
+      case 1:
+         heat_source.constant = 1e-03;
+         break;
+   }
+   ProductCoefficient neg_heat_source(-1.0, heat_source);
+   ConstantCoefficient u_bdr(0.0);
+   const double volume_fraction = 0.4;
+   const double target_volume = volume * volume_fraction;
+
+   // 3. Finite Element Spaces and discrete solutions
+   FiniteElementSpace fes_H1_Qk2(&mesh, new H1_FECollection(order + 2, dim,
+                                                            mfem::BasisType::GaussLobatto));
+   FiniteElementSpace fes_H1_Qk1(&mesh, new H1_FECollection(order + 1, dim,
+                                                            mfem::BasisType::GaussLobatto));
+   FiniteElementSpace fes_H1_Qk0(&mesh, new H1_FECollection(std::max(order + 0,1),
+                                                            dim,
+                                                            mfem::BasisType::GaussLobatto));
+   FiniteElementSpace fes_L2_Qk2(&mesh, new L2_FECollection(order + 2, dim,
+                                                            mfem::BasisType::GaussLobatto));
+   FiniteElementSpace fes_L2_Qk1(&mesh, new L2_FECollection(order + 1, dim,
+                                                            mfem::BasisType::GaussLobatto));
+   FiniteElementSpace fes_L2_Qk0(&mesh, new L2_FECollection(order + 0, dim,
+                                                            mfem::BasisType::GaussLobatto));
+
+   Array<FiniteElementSpace*> fes(Vars::numVars);
+   fes[Vars::u] = &fes_H1_Qk1;
+   fes[Vars::f_rho] = &fes_H1_Qk1;
+   fes[Vars::psi] = &fes_L2_Qk0;
+   fes[Vars::varphi] = &fes_L2_Qk0;
+   fes[Vars::f_lam] = fes[Vars::f_rho];
+   fes[Vars::lam] = fes[Vars::u];
+
+
+   Array<int> offsets = getOffsets(fes);
+   BlockVector sol(offsets), delta_sol(offsets);
+   sol = 0.0;
+   delta_sol = 0.0;
+
+   GridFunction u(fes[Vars::u], sol.GetBlock(Vars::u));
+   GridFunction psi(fes[Vars::psi], sol.GetBlock(Vars::psi));
+   GridFunction varphi(fes[Vars::varphi], sol.GetBlock(Vars::varphi));
+   GridFunction lam(fes[Vars::lam], sol.GetBlock(Vars::lam));
+   GridFunction f_rho(fes[Vars::f_rho], sol.GetBlock(Vars::f_rho));
+   GridFunction f_lam(fes[Vars::f_lam], sol.GetBlock(Vars::f_lam));
+
+   GridFunction psi_k(fes[Vars::psi]);
+   GridFunction varphi_k(fes[Vars::varphi]);
+
+   // Project solution
+   Array<int> ess_bdr_u;
+   ess_bdr_u.MakeRef(ess_bdr[Vars::u], max_attributes);
+   u.ProjectBdrCoefficient(u_bdr, ess_bdr_u);
+   lam.ProjectBdrCoefficient(u_bdr, ess_bdr_u);
+   psi = logit(volume_fraction);
+   f_rho = volume_fraction;
+
+   // 4. Define preliminary coefficients
+   ConstantCoefficient eps_cf(epsilon);
+   ConstantCoefficient alpha_k(alpha0);
+   ConstantCoefficient one_cf(1.0);
+   GridFunction zero_gf(&fes_L2_Qk2);
+   ConstantCoefficient u_max_cf(u_max);
+   zero_gf = 0.0;
+
+   MappedCoefficient one_over_alpha_k(&alpha_k, [](const double x) { return 1.0/x; });
+
+   auto simp_cf = SIMPCoefficient(&f_rho, simp_exp, rho0);
+   auto dsimp_cf = DerSIMPCoefficient(&f_rho, simp_exp, rho0);
+   auto d2simp_cf = Der2SIMPCoefficient(&f_rho, simp_exp, rho0);
+   auto rho_cf = SigmoidCoefficient(&psi);
+   auto rho_k_cf = SigmoidCoefficient(&psi_k);
+   auto dsigmoid_cf = DerSigmoidCoefficient(&psi);
+
+   GridFunctionCoefficient u_cf(&u);
+   GridFunctionCoefficient f_rho_cf(&f_rho);
+   GridFunctionCoefficient f_lam_cf(&f_lam);
+   GridFunctionCoefficient psi_cf(&psi);
+   GridFunctionCoefficient psi_k_cf(&psi_k);
+
+   SumCoefficient diff_rho(rho_cf, rho_k_cf, 1.0, -1.0);
+
+   GradientGridFunctionCoefficient Du(&u);
+   GradientGridFunctionCoefficient Dlam(&lam);
+   GradientGridFunctionCoefficient Df_rho(&f_rho);
+   GradientGridFunctionCoefficient Df_lam(&f_lam);
+
+   InnerProductCoefficient Du_Dlam(Du, Dlam);
+
+   ProductCoefficient alph_f_lam(alpha_k, f_lam_cf);
+   ProductCoefficient alph_f_lam_dsigmoid(alph_f_lam, dsigmoid_cf);
+   ProductCoefficient psi_k_dsigmoid(psi_k_cf, dsigmoid_cf);
+   ProductCoefficient dsimp_squared_Du_Dlam(dsimp_cf, Du_Dlam);
+   ProductCoefficient neg_dsimp_squared_Du_Dlam(-1.0, dsimp_squared_Du_Dlam);
+
+   MappedGridFunctionCoefficient varphi_k_by_alpha(&varphi_k, [&alpha_k](
+   const double x) { return x/alpha_k.constant; });
+   MappedGridFunctionCoefficient exp_varphi(&varphi, [](const double x) {return std::exp(x); });
+   MappedGridFunctionCoefficient exp_varphi_varphim1(&varphi, [&u_max_cf](
+   const double x) {return (x - 1.0)*std::exp(x) + u_max_cf.constant; });
+
+   // 5. Define global system for newton iteration
+   BlockLinearSystem fixedPointSystem(offsets, fes, ess_bdr);
+   fixedPointSystem.own_blocks = true;
+   for (int i=0; i<Vars::numVars; i++)
+   {
+      fixedPointSystem.SetDiagBlockMatrix(i, new BilinearForm(fes[i]));
+   }
+   std::vector<std::vector<int>> offDiags
+   {
+      {Vars::lam, Vars::varphi},
+      {Vars::varphi, Vars::u}
+   };
+   for (auto &i : offDiags)
+   {
+      fixedPointSystem.SetBlockMatrix(i[0], i[1],
+                                  new MixedBilinearForm(fes[i[1]], fes[i[0]]));
+   }
+
+   // Equation u
+   fixedPointSystem.GetDiagBlock(Vars::u)->AddDomainIntegrator(
+      // A += (r(ρ̃^i)∇δu, ∇v)
+      new DiffusionIntegrator(simp_cf)
+   );
+   fixedPointSystem.GetLinearForm(Vars::u)->AddDomainIntegrator(
+      new DomainLFIntegrator(heat_source)
+   );
+
+   // Equation lam
+   fixedPointSystem.GetDiagBlock(Vars::lam)->AddDomainIntegrator(
+      // A += (r(ρ̃^i)∇δλ, ∇v)
+      new DiffusionIntegrator(simp_cf)
+   );
+   fixedPointSystem.GetBlock(Vars::lam, Vars::varphi)->AddDomainIntegrator(
+      new MixedScalarMassIntegrator(one_over_alpha_k)
+   );
+   fixedPointSystem.GetLinearForm(Vars::lam)->AddDomainIntegrator(
+      new DomainLFIntegrator(neg_heat_source)
+   );
+   fixedPointSystem.GetLinearForm(Vars::lam)->AddDomainIntegrator(
+      new DomainLFIntegrator(varphi_k_by_alpha)
+   );
+
+   // Equation varphi
+   fixedPointSystem.GetDiagBlock(Vars::varphi)->AddDomainIntegrator(
+      // A += (r(ρ̃^i)∇δλ, ∇v)
+      new MassIntegrator(exp_varphi)
+   );
+   fixedPointSystem.GetBlock(Vars::varphi, Vars::u)->AddDomainIntegrator(
+      new MixedScalarMassIntegrator()
+   );
+   fixedPointSystem.GetLinearForm(Vars::varphi)->AddDomainIntegrator(
+      new DomainLFIntegrator(exp_varphi_varphim1)
+   );
+   fixedPointSystem.GetLinearForm(Vars::varphi)->AddDomainIntegrator(
+      new DomainLFIntegrator(u_max_cf)
+   );
+
+
+   // Equation ρ̃
+   fixedPointSystem.GetDiagBlock(Vars::f_rho)->AddDomainIntegrator(
+      new DiffusionIntegrator(eps_cf)
+   );
+   fixedPointSystem.GetDiagBlock(Vars::f_rho)->AddDomainIntegrator(
+      new MassIntegrator(one_cf)
+   );
+   fixedPointSystem.GetLinearForm(Vars::f_rho)->AddDomainIntegrator(
+      new DomainLFIntegrator(rho_cf)
+   );
+
+   // Equation ψ
+   fixedPointSystem.GetDiagBlock(Vars::psi)->AddDomainIntegrator(
+      new MassIntegrator(dsigmoid_cf)
+   );
+   fixedPointSystem.GetLinearForm(Vars::psi)->AddDomainIntegrator(
+      new DomainLFIntegrator(psi_k_dsigmoid)
+   );
+   fixedPointSystem.GetLinearForm(Vars::psi)->AddDomainIntegrator(
+      new DomainLFIntegrator(alph_f_lam_dsigmoid)
+   );
+
+   // Equation λ̃
+   fixedPointSystem.GetDiagBlock(Vars::f_lam)->AddDomainIntegrator(
+      new DiffusionIntegrator(eps_cf)
+   );
+   fixedPointSystem.GetDiagBlock(Vars::f_lam)->AddDomainIntegrator(
+      new MassIntegrator(one_cf)
+   );
+   fixedPointSystem.GetLinearForm(Vars::f_lam)->AddDomainIntegrator(
+      new DomainLFIntegrator(neg_dsimp_squared_Du_Dlam)
+   );
+
+
+
+   socketstream sout_u, sout_rho, sout_f_rho;
+   if (visualization)
+   {
+      char vishost[] = "localhost";
+      int  visport   = 19916;
+      sout_u.open(vishost, visport);
+      sout_rho.open(vishost, visport);
+      sout_f_rho.open(vishost, visport);
+      if (!sout_u)
+      {
+         cout << "Unable to connect to GLVis server at "
+              << vishost << ':' << visport << endl;
+         visualization = false;
+         cout << "GLVis visualization disabled.\n";
+      }
+      else
+      {
+         sout_u.precision(precision);
+         sout_u << "solution\n" << mesh << u;
+         sout_u << "window_title 'u'\n";
+         sout_u << "keys jmmR**c\n";
+         sout_u << flush;
+         sout_rho.precision(precision);
+         GridFunction rho(&fes_L2_Qk2);
+         rho.ProjectCoefficient(rho_cf);
+         sout_rho << "solution\n" << mesh << rho;
+         sout_rho << "window_title 'ρ'\n";
+         sout_rho << "autoscale off\n";
+         sout_rho << "valuerange 0.0 1.0\n";
+         sout_rho << "keys jmmR**c\n";
+         sout_rho << flush;
+         sout_f_rho << "solution\n" << mesh << f_rho;
+         sout_f_rho << "window_title 'ρ̃'\n";
+         sout_f_rho << "autoscale off\n";
+         sout_f_rho << "valuerange 0.0 1.0\n";
+         sout_f_rho << "keys jmmR**c\n";
+         sout_f_rho << flush;
+         cout << "GLVis visualization paused."
+              << " Press space (in the GLVis window) to resume it.\n";
+      }
+   }
+
+   // 6. Penalty Iteration
+   for (int k=0; k<maxit_penalty; k++)
+   {
+
+      mfem::out << "Iteration " << k + 1 << std::endl;
+      alpha_k.constant = alpha0*(k+1); // update α_k
+      psi_k = psi; // update ψ_k
+      varphi_k = varphi;
+      bool newton_converged = false;
+      for (int j=0; j<maxit_newton; j++) // Newton Iteration
+      {
+         mfem::out << "\nFixed Point Iteration " << std::setw(5) << j + 1 << ": " <<
+                   std::flush;
+         // delta_sol = 0.0; // initialize newton difference
+         // fixedPointSystem.Assemble(delta_sol); // Update system with current solution
+         // fixedPointSystem.PCG(delta_sol); // Solve system
+         Vector old_sol(sol);
+         fixedPointSystem.Assemble(sol);
+         fixedPointSystem.GMRES(sol);
+         // fixedPointSystem.PCG(sol);
+         // fixedPointSystem.SolveDiag(sol, ordering, true);
+         // Project solution
+         // NOTE: Newton stopping criteria cannot see this update. Should I consider this update?
+         const double current_volume_fraction = VolumeProjection(psi,
+                                                                 target_volume) / volume;
+         // newton successive difference
+         clip_abs(psi, max_psi);
+         const double diff_newton = std::sqrt(old_sol.DistanceSquaredTo(
+                                                 sol) / old_sol.Size());
+         mfem::out << std::scientific << diff_newton << std::endl;
+
+         if (diff_newton < tol_newton)
+         {
+            newton_converged = true;
+            break;
+         }
+      } // end of Newton iteration
+      if (!newton_converged)
+      {
+         mfem::out << "Newton failed to converge" << std::endl;
+      }
+      if (visualization)
+      {
+
+         sout_u << "solution\n" << mesh << u << "window_title 'u: max=" << u.Max() << "'\n" << flush;
+         GridFunction rho(&fes_L2_Qk2);
+         rho.ProjectCoefficient(rho_cf);
+         sout_rho << "solution\n" << mesh << rho << "valuerange 0.0 1.0\n" << flush;
+         sout_f_rho << "solution\n" << mesh << f_rho << "valuerange 0.0 1.0\n" << flush;
+
+
+         ostringstream filename;
+         ofstream file;
+
+         filename << "mesh" << std::setfill('0') << std::setw(6) << k << ".mesh";
+         mesh.Save(filename.str().c_str());
+         filename.str(std::string());
+
+         filename << "u" << std::setfill('0') << std::setw(6) << k << ".gf";
+         file.open(filename.str());
+         GridFunction u_high(&fes_L2_Qk2);
+         u_high.ProjectCoefficient(u_cf);
+         u_high.Save(file);
+         file.close();
+         file.clear();
+         filename.str(std::string());
+
+         filename << "rho" << std::setfill('0') << std::setw(6) << k << ".gf";
+         file.open(filename.str());
+         rho.Save(file);
+         file.close();
+         file.clear();
+         filename.str(std::string());
+
+         GridFunction f_rho_high(&fes_L2_Qk2);
+         f_rho_high.ProjectCoefficient(f_rho_cf);
+         filename << "f_rho" << std::setfill('0') << std::setw(6) << k << ".gf";
+         file.open(filename.str());
+         f_rho_high.Save(file);
+         file.close();
+         file.clear();
+         filename.str(std::string());
+      }
+      const double diff_penalty = zero_gf.ComputeL2Error(diff_rho) /
+                                  alpha_k.constant / std::sqrt(volume);
+      mfem::out << "||ρ - ρ_k|| = " << std::scientific << diff_penalty << std::endl
+                << std::endl;
+      if (diff_penalty < tol_penalty)
+      {
+         break;
+      }
+   } // end of penalty iteration
+
+   return 0;
+}
