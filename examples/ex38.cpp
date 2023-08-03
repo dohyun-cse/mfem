@@ -44,6 +44,8 @@ int main(int argc, char *argv[])
    int order = 0;
    const char *device_config = "cpu";
    bool visualization = true;
+
+   double u_max = 1;
    double alpha0 = 1.0;
    double epsilon = 1e-04;
    double rho0 = 1e-6;
@@ -115,9 +117,12 @@ int main(int argc, char *argv[])
       case 0:
          ess_bdr(Vars::u, 2) = true;
          ess_bdr(Vars::u, 3) = true;
+         ess_bdr(Vars::lam, 2) = true;
+         ess_bdr(Vars::lam, 3) = true;
          break;
       case 1:
          ess_bdr(Vars::u, 0) = true;
+         ess_bdr(Vars::lam, 0) = true;
          break;
    }
 
@@ -132,6 +137,7 @@ int main(int argc, char *argv[])
          heat_source.constant = 1e-03;
          break;
    }
+   ProductCoefficient neg_heat_source(-1.0, heat_source);
    ConstantCoefficient u_bdr(0.0);
    const double volume_fraction = 0.4;
    const double target_volume = volume * volume_fraction;
@@ -155,10 +161,10 @@ int main(int argc, char *argv[])
    fes[Vars::u] = &fes_H1_Qk1;
    fes[Vars::f_rho] = &fes_H1_Qk1;
    fes[Vars::psi] = &fes_L2_Qk0;
+   fes[Vars::varphi] = &fes_L2_Qk0;
    fes[Vars::f_lam] = fes[Vars::f_rho];
    fes[Vars::lam] = fes[Vars::u];
-   fes[Vars::varphi] = &fes_L2_Qk0;
-   
+
 
    Array<int> offsets = getOffsets(fes);
    BlockVector sol(offsets), delta_sol(offsets);
@@ -167,15 +173,19 @@ int main(int argc, char *argv[])
 
    GridFunction u(fes[Vars::u], sol.GetBlock(Vars::u));
    GridFunction psi(fes[Vars::psi], sol.GetBlock(Vars::psi));
+   GridFunction varphi(fes[Vars::varphi], sol.GetBlock(Vars::varphi));
+   GridFunction lam(fes[Vars::lam], sol.GetBlock(Vars::lam));
    GridFunction f_rho(fes[Vars::f_rho], sol.GetBlock(Vars::f_rho));
    GridFunction f_lam(fes[Vars::f_lam], sol.GetBlock(Vars::f_lam));
 
    GridFunction psi_k(fes[Vars::psi]);
+   GridFunction varphi_k(fes[Vars::varphi]);
 
    // Project solution
    Array<int> ess_bdr_u;
    ess_bdr_u.MakeRef(ess_bdr[Vars::u], max_attributes);
    u.ProjectBdrCoefficient(u_bdr, ess_bdr_u);
+   lam.ProjectBdrCoefficient(u_bdr, ess_bdr_u);
    psi = logit(volume_fraction);
    f_rho = volume_fraction;
 
@@ -184,7 +194,10 @@ int main(int argc, char *argv[])
    ConstantCoefficient alpha_k(alpha0);
    ConstantCoefficient one_cf(1.0);
    GridFunction zero_gf(&fes_L2_Qk2);
+   ConstantCoefficient u_max_cf(u_max);
    zero_gf = 0.0;
+
+   MappedCoefficient one_over_alpha_k(&alpha_k, [](const double x) { return 1.0/x; });
 
    auto simp_cf = SIMPCoefficient(&f_rho, simp_exp, rho0);
    auto dsimp_cf = DerSIMPCoefficient(&f_rho, simp_exp, rho0);
@@ -202,15 +215,23 @@ int main(int argc, char *argv[])
    SumCoefficient diff_rho(rho_cf, rho_k_cf, 1.0, -1.0);
 
    GradientGridFunctionCoefficient Du(&u);
+   GradientGridFunctionCoefficient Dlam(&lam);
    GradientGridFunctionCoefficient Df_rho(&f_rho);
    GradientGridFunctionCoefficient Df_lam(&f_lam);
 
-   InnerProductCoefficient squared_normDu(Du, Du);
+   InnerProductCoefficient Du_Dlam(Du, Dlam);
 
    ProductCoefficient alph_f_lam(alpha_k, f_lam_cf);
    ProductCoefficient alph_f_lam_dsigmoid(alph_f_lam, dsigmoid_cf);
    ProductCoefficient psi_k_dsigmoid(psi_k_cf, dsigmoid_cf);
-   ProductCoefficient dsimp_squared_normDu(dsimp_cf, squared_normDu);
+   ProductCoefficient dsimp_squared_Du_Dlam(dsimp_cf, Du_Dlam);
+   ProductCoefficient neg_dsimp_squared_Du_Dlam(-1.0, dsimp_squared_Du_Dlam);
+
+   MappedGridFunctionCoefficient varphi_k_by_alpha(&varphi_k, [&alpha_k](
+   const double x) { return x/alpha_k.constant; });
+   MappedGridFunctionCoefficient exp_varphi(&varphi, [](const double x) {return std::exp(x); });
+   MappedGridFunctionCoefficient exp_varphi_varphim1(&varphi, [&u_max_cf](
+   const double x) {return (x - 1.0)*std::exp(x) + u_max_cf.constant; });
 
    // 5. Define global system for newton iteration
    BlockLinearSystem fixedPointSystem(offsets, fes, ess_bdr);
@@ -218,6 +239,16 @@ int main(int argc, char *argv[])
    for (int i=0; i<Vars::numVars; i++)
    {
       fixedPointSystem.SetDiagBlockMatrix(i, new BilinearForm(fes[i]));
+   }
+   std::vector<std::vector<int>> offDiags
+   {
+      {Vars::lam, Vars::varphi},
+      {Vars::varphi, Vars::u}
+   };
+   for (auto &i : offDiags)
+   {
+      fixedPointSystem.SetBlockMatrix(i[0], i[1],
+                                  new MixedBilinearForm(fes[i[1]], fes[i[0]]));
    }
 
    // Equation u
@@ -228,6 +259,37 @@ int main(int argc, char *argv[])
    fixedPointSystem.GetLinearForm(Vars::u)->AddDomainIntegrator(
       new DomainLFIntegrator(heat_source)
    );
+
+   // Equation lam
+   fixedPointSystem.GetDiagBlock(Vars::lam)->AddDomainIntegrator(
+      // A += (r(ρ̃^i)∇δλ, ∇v)
+      new DiffusionIntegrator(simp_cf)
+   );
+   fixedPointSystem.GetBlock(Vars::lam, Vars::varphi)->AddDomainIntegrator(
+      new MixedScalarMassIntegrator(one_over_alpha_k)
+   );
+   fixedPointSystem.GetLinearForm(Vars::lam)->AddDomainIntegrator(
+      new DomainLFIntegrator(neg_heat_source)
+   );
+   fixedPointSystem.GetLinearForm(Vars::lam)->AddDomainIntegrator(
+      new DomainLFIntegrator(varphi_k_by_alpha)
+   );
+
+   // Equation varphi
+   fixedPointSystem.GetDiagBlock(Vars::varphi)->AddDomainIntegrator(
+      // A += (r(ρ̃^i)∇δλ, ∇v)
+      new MassIntegrator(exp_varphi)
+   );
+   fixedPointSystem.GetBlock(Vars::varphi, Vars::u)->AddDomainIntegrator(
+      new MixedScalarMassIntegrator()
+   );
+   fixedPointSystem.GetLinearForm(Vars::varphi)->AddDomainIntegrator(
+      new DomainLFIntegrator(exp_varphi_varphim1)
+   );
+   fixedPointSystem.GetLinearForm(Vars::varphi)->AddDomainIntegrator(
+      new DomainLFIntegrator(u_max_cf)
+   );
+
 
    // Equation ρ̃
    fixedPointSystem.GetDiagBlock(Vars::f_rho)->AddDomainIntegrator(
@@ -259,7 +321,7 @@ int main(int argc, char *argv[])
       new MassIntegrator(one_cf)
    );
    fixedPointSystem.GetLinearForm(Vars::f_lam)->AddDomainIntegrator(
-      new DomainLFIntegrator(dsimp_squared_normDu)
+      new DomainLFIntegrator(neg_dsimp_squared_Du_Dlam)
    );
 
 
@@ -306,12 +368,6 @@ int main(int argc, char *argv[])
       }
    }
 
-
-   Array<int> ordering(0); // ordering of solving the equation
-   ordering.Append(Vars::f_rho);
-   ordering.Append(Vars::u);
-   ordering.Append(Vars::f_lam);
-   ordering.Append(Vars::psi);
    // 6. Penalty Iteration
    for (int k=0; k<maxit_penalty; k++)
    {
@@ -319,18 +375,20 @@ int main(int argc, char *argv[])
       mfem::out << "Iteration " << k + 1 << std::endl;
       alpha_k.constant = alpha0*(k+1); // update α_k
       psi_k = psi; // update ψ_k
+      varphi_k = varphi;
       bool newton_converged = false;
       for (int j=0; j<maxit_newton; j++) // Newton Iteration
       {
-         mfem::out << "\tNewton Iteration " << std::setw(5) << j + 1 << ": " <<
+         mfem::out << "\nFixed Point Iteration " << std::setw(5) << j + 1 << ": " <<
                    std::flush;
          // delta_sol = 0.0; // initialize newton difference
          // fixedPointSystem.Assemble(delta_sol); // Update system with current solution
          // fixedPointSystem.PCG(delta_sol); // Solve system
          Vector old_sol(sol);
-         // fixedPointSystem.Assemble(sol);
+         fixedPointSystem.Assemble(sol);
+         fixedPointSystem.GMRES(sol);
          // fixedPointSystem.PCG(sol);
-         fixedPointSystem.SolveDiag(sol, ordering, true);
+         // fixedPointSystem.SolveDiag(sol, ordering, true);
          // Project solution
          // NOTE: Newton stopping criteria cannot see this update. Should I consider this update?
          const double current_volume_fraction = VolumeProjection(psi,
@@ -353,8 +411,8 @@ int main(int argc, char *argv[])
       }
       if (visualization)
       {
-         
-         sout_u << "solution\n" << mesh << u << flush;
+
+         sout_u << "solution\n" << mesh << u << "window_title 'u: max=" << u.Max() << "'\n" << flush;
          GridFunction rho(&fes_L2_Qk2);
          rho.ProjectCoefficient(rho_cf);
          sout_rho << "solution\n" << mesh << rho << "valuerange 0.0 1.0\n" << flush;
@@ -376,14 +434,14 @@ int main(int argc, char *argv[])
          file.close();
          file.clear();
          filename.str(std::string());
-         
+
          filename << "rho" << std::setfill('0') << std::setw(6) << k << ".gf";
          file.open(filename.str());
          rho.Save(file);
          file.close();
          file.clear();
          filename.str(std::string());
-         
+
          GridFunction f_rho_high(&fes_L2_Qk2);
          f_rho_high.ProjectCoefficient(f_rho_cf);
          filename << "f_rho" << std::setfill('0') << std::setw(6) << k << ".gf";
@@ -393,7 +451,8 @@ int main(int argc, char *argv[])
          file.clear();
          filename.str(std::string());
       }
-      const double diff_penalty = zero_gf.ComputeL2Error(diff_rho) / alpha_k.constant / std::sqrt(volume);
+      const double diff_penalty = zero_gf.ComputeL2Error(diff_rho) /
+                                  alpha_k.constant / std::sqrt(volume);
       mfem::out << "||ρ - ρ_k|| = " << std::scientific << diff_penalty << std::endl
                 << std::endl;
       if (diff_penalty < tol_penalty)
