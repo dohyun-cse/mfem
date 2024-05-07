@@ -255,7 +255,7 @@ HelmholtzFilter::HelmholtzFilter(FiniteElementSpace &fes, const double r_min)
    filter_form->Assemble();
    filter_form->Finalize();
 
-   ellipticSolver.reset(new EllipticSolver(*filter_form, *filter, ess_bdr));
+   ellipticSolver.reset(new EllipticSolver(*filter_form, *filter));
 }
 
 
@@ -264,7 +264,6 @@ void HelmholtzFilter::SetDensity(Coefficient *rho)
 {
    rho_form.reset(MakeLinearForm(&fes));
    rho_form->AddDomainIntegrator(new DomainLFIntegrator(*rho));
-   rho_form->Assemble();
 }
 
 void HelmholtzFilter::UpdateFilter()
