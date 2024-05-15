@@ -8,11 +8,17 @@
 namespace mfem
 {
 
-/// @brief Inverse sigmoid function
-inline double inv_sigmoid(const double x)
+inline double FermiDiracEntropy(const double x, const double eps=1e-12)
 {
-   const double tol = 1e-12;
-   const double tmp = std::min(std::max(tol,x),1.0-tol);
+   const double y = 1.0-x;
+   return (x < eps ? 0 : x*std::log(x))
+          + (y < eps ? 0 : y*std::log(y));
+}
+
+/// @brief Inverse sigmoid function
+inline double inv_sigmoid(const double x, const double eps=1e-12)
+{
+   const double tmp = std::min(std::max(eps,x),1.0-eps);
    return std::log(tmp/(1.0-tmp));
 }
 
@@ -50,85 +56,59 @@ inline double der2_simp(const double x, const double rho_0,
    return k * (k - 1.0) * std::pow(x, k - 2.0) * (rho_max - rho_0);
 }
 
-class LegendreFunction
+class DifferentiableFunction
 {
+   typedef std::function<double(const double)> FunType;
 private:
-   std::function<double(const double)> f;
-   std::function<double(const double)> df;
-   std::function<double(const double)> inv_df;
+   FunType f, df, *d2f;
 protected:
 public:
-   double operator()(const double x) { return f(x); }
-   std::function<double(const double)> &GetForwardMap() { return df; }
-   std::function<double(const double)> &GetInverseMap() { return inv_df; }
-   void SetLegendre(std::function<double(const double)> h) { f = h; }
-   void SetForwardMap(std::function<double(const double)> p2l) { df = p2l; }
-   void SetInverseMap(std::function<double(const double)> l2p) { inv_df = l2p; }
-};
-
-// Fermi-Dirac function, xlog(x) + (1-x)log(1-x)
-class FermiDirac: public LegendreFunction
-{
-public:
-   // Fermi-Dirac function with safe logarithm
-   FermiDirac(const double eps=1e-12):LegendreFunction()
+   DifferentiableFunction(FunType f, FunType df):f(f), df(df), d2f(nullptr) {}
+   FunType &GetFunction() { return f; }
+   FunType &GetDerivative() { return df; }
+   FunType &GetHessian()
    {
-      // Fermi-Dirac
-      SetLegendre([eps](const double x)
-      {
-         const double y = 1.0 - x;
-         return (x < eps ? 0 : x*log(x))
-                + (y < eps ? 0 : y*log(y));
-      });
-      // Derivative, logit = log(x/(1-x))
-      SetForwardMap([eps](const double x)
-      {
-         const double y = x > 0.5 ? 1.0 - x : x;
-         const double z = y / (1.0 - y);
-         const double result = z < eps ? std::log(eps) : std::log(z);
-         return x > 0.5 ? -result : result;
-      });
-      // Inverse of Derivative, sigmoid
-      SetInverseMap(sigmoid);
+      if (!d2f) { MFEM_ABORT("Hessian not defined"); }
+      return *d2f;
    }
 };
 
+class LegendreFunction : public DifferentiableFunction
+{
+   typedef std::function<double(const double)> FunType;
+private:
+   FunType inv_df;
+protected:
+public:
+   LegendreFunction(FunType f, FunType df, FunType inv_df): DifferentiableFunction(f, df), inv_df(inv_df) {}
+   std::function<double(const double)> &GetPrimal2Dual()
+   {
+     return GetDerivative();
+   }
+   std::function<double(const double)> &GetDual2Primal()
+   {
+     return inv_df;
+   }
+};
+
+class FermiDirac : public LegendreFunction
+{
+  public:
+    FermiDirac(const double eps=1e-12):
+      LegendreFunction([eps](const double x){return FermiDiracEntropy(x, eps); },
+          [eps](const double x) { return inv_sigmoid(x, eps); },
+          [](const double x) { return sigmoid(x); }) {}
+};
 // Shannon entropy, xlog(x) - x
 class Shannon : public LegendreFunction
 {
 public:
    // Shannon entropy, xlog(x) - x
-   Shannon(const double eps):LegendreFunction()
-   {
-      // Shannon entropy
-      SetLegendre([eps](const double x)
-      {
-         return x < eps ? -x : x*std::log(x) - x;
-      });
-      // Derivative, safe log(x)
-      SetForwardMap([eps](const double x)
-      {
-         return x < eps ? std::log(eps) : std::log(x);
-      });
-      // Inverse of Derivative, exp
-      SetInverseMap([](const double x)
-      {
-         return std::exp(x);
-      });
-   }
+   Shannon(const double eps=1e-12):
+     LegendreFunction([eps](const double x){return x < eps ? -x : x*std::log(x) - x; },
+         [eps](const double x) { return x < eps ? std::log(eps) : std::log(x); },
+         [](const double x){ return std::exp(x); }) {}
 };
-
-inline double FermiDiracEntropy(const double x)
-{
-   const double y = 1.0-x;
-   return (x < 1e-13 ? 0 : x*std::log(x))
-          + (y < 1e-13 ? 0 : y*std::log(y));
-}
-
-inline double ShannonEntropy(const double x)
-{
-   return x < 1e-13 ? -x : x*std::log(x) - x;
-}
 // exponential double type
 inline double exp_d(const double x) {return std::exp(x);}
 // log double type
@@ -365,6 +345,35 @@ protected:
 private:
 };
 
+class ProximalHelmholtzFilter : public DensityFilter
+{
+public:
+protected:
+   std::unique_ptr<BilinearForm> filter;
+   std::unique_ptr<LinearForm> rhoform;
+   Array<int> ess_bdr;
+   Array<int> material_bdr;
+   Array<int> void_bdr;
+   ConstantCoefficient eps2;
+   ConstantCoefficient bdr_eps;
+private:
+
+public:
+   ProximalHelmholtzFilter(FiniteElementSpace &fes, const double eps, Array<int> &ess_bdr,
+                   bool enforce_symmetricity=false);
+   void Apply(const GridFunction &rho, GridFunction &frho,
+              bool apply_bdr=true) override
+   {
+      GridFunctionCoefficient rho_cf(&rho);
+      Apply(rho_cf, frho, apply_bdr);
+   }
+   void Apply(Coefficient &rho, GridFunction &frho,
+              bool apply_bdr=true) override;
+   BilinearForm& GetBilinearForm() {return *filter; }
+protected:
+private:
+};
+
 class HelmholtzL2Filter : public DensityFilter
 {
 public:
@@ -494,9 +503,7 @@ private:
 public:
    LatentDesignDensity(FiniteElementSpace &fes,
                        DensityFilter &filter, double vol_frac,
-                       std::function<double(double)> h,
-                       std::function<double(double)> primal2dual,
-                       std::function<double(double)> dual2primal,
+                       LegendreFunction &legendre,
                        bool clip_lower=false, bool clip_upper=false);
    double Project() override;
    double StationarityError(const GridFunction &grad,

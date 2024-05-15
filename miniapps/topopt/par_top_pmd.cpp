@@ -190,8 +190,9 @@ int main(int argc, char *argv[])
    SIMPProjector densityProjector(exponent, rho_min);
    HelmholtzFilter filter(filter_fes, filter_radius/(2.0*sqrt(3.0)),
                           ess_bdr_filter, true);
+   FermiDirac legendre;
    LatentDesignDensity density(control_fes, filter, vol_fraction,
-                               FermiDiracEntropy, inv_sigmoid, sigmoid, false, false);
+                               legendre, false, false);
    density.UsePrimalFilter(true);
 
    ConstantCoefficient E_cf(E), nu_cf(nu);

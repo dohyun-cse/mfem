@@ -2,22 +2,86 @@
 #define THREE_FIELD_HPP
 #include "fem/bilininteg.hpp"
 #include "fem/coefficient.hpp"
-#include "general/error.hpp"
+// #include "general/error.hpp"
 #include "helper.hpp"
-#include "mfem.hpp"
+// #include "mfem.hpp"
 
 namespace mfem
 {
+const double LOG_TOL = 1e-12;
+const double LOG_MIN_VAL = std::log(LOG_TOL); 
+
+inline double safe_log(double x)
+{
+  return x < LOG_TOL ? LOG_MIN_VAL : std::log(x);
+}
+
+inline double binary_entropy(double x)
+{
+   const double logx = safe_log(x);
+   const double logy = safe_log(1.0 - x);
+   return -x * logx - (1 - x) * logy;
+}
+
+inline double sigmoid(double x)
+{
+   if (x > 0)
+   {
+      return 1.0 / (1.0 + std::exp(-x));
+   }
+   else
+   {
+      const double expx = std::exp(x);
+      return expx / (1.0 + expx);
+   }
+}
+
+inline double sigmoid_derivative(double x)
+{
+   const double s = sigmoid(x);
+   return s * (1 - s);
+}
+
+inline double logit(double x)
+{
+  const double y = x < 0.5 ? x / (1.0 - x) : (1.0 - x) / x;
+  const double logy = safe_log(y);
+  return x < 0.5 ? logy : -logy;
+}
+
+inline double shannon_entropy(double x)
+{
+   return -x * safe_log(x);
+}
+
+inline double exp_double(double x) { return std::exp(x); }
+
+inline double log_double(double x) { return x < LOG_TOL ? -27.6310211159 : std::log(x); }
 
 class DesignDensity
 {
+   enum VolConstraint { VOL_MIN=-1, VOL_EQ, VOL_MAX };
+
 public:
-   DesignDensity(FiniteElementSpace &fes) : fes(fes) {}
-   Coefficient *GetDensityCoefficient() { return density_coeff; }
+   DesignDensity(FiniteElementSpace &fes, VolConstraint vol_constraint,
+                 double vol_frac) : fes(fes), vol_constraint(vol_constraint),
+      vol_frac(vol_frac) {}
+   Coefficient &GetDensityCoefficient()
+   {
+      if (!density_coeff) { MFEM_ABORT("Density coefficient is undefined."); }
+      return *density_coeff;
+   }
+   virtual void SetAdjointData(Coefficient *dFdrho) = 0;
+   void SetVolumeConstraint(VolConstraint new_vol_constraint,
+                            double new_vol_frac)
+   { vol_constraint = new_vol_constraint; vol_frac = new_vol_frac; }
+   virtual void Project() = 0;
 
 protected:
    FiniteElementSpace &fes;
-   Coefficient *density_coeff;
+   std::unique_ptr<Coefficient> density_coeff;
+   VolConstraint vol_constraint;
+   double vol_frac;
 };
 
 class DensityFilter
@@ -25,15 +89,10 @@ class DensityFilter
 public:
    DensityFilter(FiniteElementSpace &fes) : fes(fes) {}
    Coefficient *GetFilterCoefficient() { return filter_coeff.get(); }
-   virtual void SetDensity(Coefficient *rho) = 0;
-   virtual void SetGradientData(Coefficient *dFdrho) = 0;
+   virtual void SetDensity(Coefficient &rho) = 0;
+   virtual void SetAdjointData(Coefficient &dFdrho) = 0;
    virtual void UpdateFilter() = 0;
-   virtual void UpdateGradient() = 0;
-
-   /**
-    * Set the boundary of the void material
-    * @param void_material_bdr void (-1) or material (1) boundary
-    */
+   virtual void UpdateAdjoint() = 0;
    virtual void SetBoundary(Array<int> &void_material_bdr_)
    {
       void_material_bdr = void_material_bdr_;
@@ -68,25 +127,30 @@ private:
 class ThreeFieldDensity
 {
 public:
-   ThreeFieldDensity(DesignDensity &design_density,
-                     DensityFilter &density_filter,
-                     DifferentiableMap &filter_to_physical)
-      : design_density(design_density), density_filter(density_filter),
-        filter_to_physical(filter_to_physical) {}
+   ThreeFieldDensity(DesignDensity &density,
+                     DensityFilter &filter,
+                     DifferentiableMap &projector)
+      : density(density), filter(filter),
+        projector(projector)
+   {
+      filter.SetDensity(density.GetDensityCoefficient());
+      projector.GetCoefficient(filter.GetFilterCoefficient());
+   }
 
    TransformedCoefficient GetPhysicalDensity()
    {
-      return filter_to_physical.GetCoefficient(
-                density_filter.GetFilterCoefficient());
+      return projector.GetCoefficient(
+                filter.GetFilterCoefficient());
    }
 
 protected:
 private:
 public:
 protected:
-   DesignDensity &design_density;
-   DensityFilter &density_filter;
-   DifferentiableMap &filter_to_physical;
+   DesignDensity &density;
+   DensityFilter &filter;
+   DifferentiableMap &projector;
+   std::unique_ptr<TransformedCoefficient> physical_density;
 
 private:
 };
@@ -115,60 +179,6 @@ private:
    double (*df)(double);
    double (*df_inv)(double);
 };
-
-inline double binary_entropy(double x)
-{
-   if (x < 1e-08 || x > 1 - 1e-08)
-   {
-      return 0.0;
-   }
-   return -x * std::log(x) - (1 - x) * std::log(1 - x);
-}
-
-inline double sigmoid(double x)
-{
-   if (x > 0)
-   {
-      return 1.0 / (1.0 + std::exp(-x));
-   }
-   else
-   {
-      const double expx = std::exp(x);
-      return expx / (1.0 + expx);
-   }
-}
-
-inline double sigmoid_derivative(double x)
-{
-   const double s = sigmoid(x);
-   return s * (1 - s);
-}
-
-inline double logit(double x)
-{
-   if (x < 1e-08)
-   {
-      return -40.0;
-   }
-   if (x > 1 - 1e-08)
-   {
-      return 40.0;
-   }
-   return std::log(x / (1 - x));
-}
-
-inline double shannon_entropy(double x)
-{
-   if (x < 1e-08 || x > 1 - 1e-08)
-   {
-      return 0.0;
-   }
-   return -x * std::log(x);
-}
-
-inline double exp_double(double x) { return std::exp(x); }
-
-inline double log_double(double x) { return std::log(x); }
 
 inline LegendreFunction FermiDiracEntropy()
 {
@@ -251,7 +261,7 @@ class HelmholtzFilter : public DensityFilter
 public:
    HelmholtzFilter(FiniteElementSpace &fes, const double r_min);
    void SetDensity(Coefficient *rho) override;
-   void SetGradientData(Coefficient *dFdrho) override;
+   void SetGradientData(Coefficient *dFdrho, GridFunction &grad) override;
    void UpdateFilter() override;
    void UpdateGradient() override;
    void SetBoundary(Array<int> &void_material_bdr_) override;
@@ -260,8 +270,10 @@ private:
    ConstantCoefficient eps2;
    Array<int> ess_bdr;
    std::unique_ptr<BilinearForm> filter_form;
-   std::unique_ptr<EllipticSolver> ellipticSolver;
+   std::unique_ptr<EllipticSolver> rho_solver;
+   std::unique_ptr<EllipticSolver> grad_solver;
    std::unique_ptr<LinearForm> rho_form;
+   std::unique_ptr<LinearForm> grad_form;
    std::unique_ptr<GridFunction> filter;
 };
 

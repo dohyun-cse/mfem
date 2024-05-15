@@ -1,6 +1,5 @@
 #include "topopt.hpp"
 #include "helper.hpp"
-#include <fstream>
 
 namespace mfem
 {
@@ -570,12 +569,10 @@ Coefficient &ThresholdProjector::GetDerivative(GridFunction &frho)
 
 LatentDesignDensity::LatentDesignDensity(FiniteElementSpace &fes,
                                          DensityFilter &filter, double vol_frac,
-                                         std::function<double(double)> h,
-                                         std::function<double(double)> primal2dual,
-                                         std::function<double(double)> dual2primal,
+                                         LegendreFunction &legendre,
                                          bool clip_lower, bool clip_upper):
    DesignDensity(fes, filter, vol_frac),
-   h(h), p2d(primal2dual), d2p(dual2primal),
+   h(legendre.GetFunction()), p2d(legendre.GetPrimal2Dual()), d2p(legendre.GetDual2Primal()),
    clip_lower(clip_lower), clip_upper(clip_upper),
    zero_gf(MakeGridFunction(&fes)),
    use_primal_filter(true)
@@ -823,7 +820,7 @@ void ParametrizedLinearEquation::DualSolve(GridFunction &x, LinearForm &new_b)
    new_b.Assemble();
    SolveSystem(x);
    // Release and restore. We need to release before reset as new_b is not owned by this.
-   (void) b.release();
+   LinearForm *new_b_ptr = b.release();
    b.reset(b_tmp_storage);
 }
 

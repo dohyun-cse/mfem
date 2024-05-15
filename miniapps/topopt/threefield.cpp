@@ -255,7 +255,6 @@ HelmholtzFilter::HelmholtzFilter(FiniteElementSpace &fes, const double r_min)
    filter_form->Assemble();
    filter_form->Finalize();
 
-   ellipticSolver.reset(new EllipticSolver(*filter_form, *filter));
 }
 
 
@@ -264,15 +263,23 @@ void HelmholtzFilter::SetDensity(Coefficient *rho)
 {
    rho_form.reset(MakeLinearForm(&fes));
    rho_form->AddDomainIntegrator(new DomainLFIntegrator(*rho));
+   rho_solver.reset(new EllipticSolver(*filter_form, *rho_form));
+}
+
+void HelmholtzFilter::SetGradientData(Coefficient *dPhydrho, GridFunction &grad)
+{
+   grad_form.reset(MakeLinearForm(&fes));
+   grad_form->AddDomainIntegrator(new DomainLFIntegrator(*dPhydrho));
+   grad_solver.reset(new EllipticSolver(*filter_form, *grad_form));
 }
 
 void HelmholtzFilter::UpdateFilter()
 {
-   MFEM_ABORT("Not implemented yet");
+   rho_solver->Solve(*filter, true, false);
 }
 
 void HelmholtzFilter::UpdateGradient()
 {
-
+   grad_solver->Solve(grad, true, false);
 }
 } // namespace mfem
