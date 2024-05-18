@@ -6,6 +6,8 @@
 #include "fem/gridfunc.hpp"
 #include "general/error.hpp"
 #include "helper.hpp"
+#include "mpi.h"
+#include "mpi_proto.h"
 // #include "mfem.hpp"
 
 namespace mfem
@@ -164,22 +166,22 @@ public:
          y = f();
          if (std::abs(y) < tol_res)
          {
-           return y;
+            return y;
          }
          x3 = x2;
          x2 = x1;
          if (y0 * y < 0)
          {
-           x1 = x; y1 = y;
+            x1 = x; y1 = y;
          }
          else
          {
-           x0 = x; y0 = y;
+            x0 = x; y0 = y;
          }
          if (std::abs(y0) < std::abs(y1))
          {
-           std::swap(x0, x1);
-           std::swap(y0, y1);
+            std::swap(x0, x1);
+            std::swap(y0, y1);
          }
       }
       return y;
@@ -199,6 +201,22 @@ public:
       grad.reset(MakeGridFunction(&fes));
       density_cf.reset(new GridFunctionCoefficient(density_gf.get()));
       grad_cf.reset(new GridFunctionCoefficient(grad.get()));
+#ifdef MFEM_USE_MPI
+      ParFiniteElementSpace *pfes = dynamic_cast<ParFiniteElementSpace*>(&fes);
+      if (pfes) {parallel = true; comm = pfes->GetComm();}
+#endif
+      volume_shift = 0.0;
+      density_integral_form.reset(MakeLinearForm(&fes));
+      shifted_density.reset(new MappedGridFunctionCoefficient(
+                               density_gf.get(), [this](double x)
+      {
+         return std::max(this->min_val, std::min(this->max_val, x + this->volume_shift));
+      }));
+      density_integral_form->Assemble();
+      target_volume = density_integral_form->Sum();
+#ifdef MFEM_USE_MPI
+      if (parallel) { MPI_Allreduce(MPI_IN_PLACE, &target_volume, 1, MPI_DOUBLE, MPI_SUM, comm); }
+#endif
    }
    FiniteElementSpace &GetFE() {return fes;}
    VolConstraint GetVolConstraint() {return vol_constraint; }
@@ -211,11 +229,43 @@ public:
    GridFunction & GetGradGridFunction() { return *grad; }
    Coefficient & GetGradCoefficient() {return *grad_cf;}
    virtual void SetAdjointData(Coefficient *dFdrho) = 0;
+   bool CheckVolumeConstraint()
+   {
+      switch (vol_constraint)
+      {
+         case mfem::VolConstraint::VOL_EQ: return std::abs(vol_frac - volume) < 1e-08;
+         case mfem::VolConstraint::VOL_MAX: return volume < vol_frac;
+         case mfem::VolConstraint::VOL_MIN: return volume > vol_frac;
+      }
+   }
    void SetVolumeConstraint(VolConstraint new_vol_constraint,
                             double new_vol_frac)
    { vol_constraint = new_vol_constraint; vol_frac = new_vol_frac; }
-   virtual void Project()
+   virtual double Project()
    {
+      if (!volume_solver)
+      {
+         volume_solver.reset(new BisectionSolver(volume_shift,
+                                                 [this]()
+         {
+            this->density_integral_form->Assemble();
+            double sum = this->density_integral_form->Sum();
+#ifdef MFEM_USE_MPI
+            if (this->parallel)
+            {
+               MPI_Allreduce(MPI_IN_PLACE, &sum, 1, MPI_DOUBLE, MPI_SUM, comm);
+            }
+#endif
+            return sum - this->target_volume;
+         }, 1e-08));
+      }
+      if (CheckVolumeConstraint()) { return 0.0; }
+      static_cast<BisectionSolver&>(*volume_solver).SetInterval(-1, 1);
+      volume_solver->Solve();
+      double current_volume_shift = volume_shift;
+      density_gf->ProjectCoefficient(*shifted_density);
+      volume_shift = 0.0;
+      return current_volume_shift;
    }
 
 protected:
@@ -226,6 +276,16 @@ protected:
    std::unique_ptr<Coefficient> grad_cf;
    VolConstraint vol_constraint;
    double vol_frac;
+   double target_volume;
+   double volume;
+   double volume_shift;
+   bool parallel = false;
+#ifdef MFEM_USE_MPI
+   MPI_Comm comm;
+#endif
+   std::unique_ptr<Coefficient> shifted_density;
+   std::unique_ptr<NonlinearEquationSolver> volume_solver;
+   std::unique_ptr<LinearForm> density_integral_form;
 };
 
 class DensityFilter
@@ -313,17 +373,13 @@ public:
                      DensityFilter &filter,
                      DifferentiableMap &projector,
                      VolConstraint vol_constraint,
-                     double vol_frac
-                    )
+                     double vol_frac)
       : DesignDensity(fes, vol_constraint, vol_frac), filter(filter),
         projector(projector)
    {
       raw_density_cf.reset(density_cf.release());
       filter.SetDensity(*raw_density_cf);
       density_cf.reset(projector.NewCoefficient(filter.GetFilteredDensity()));
-   }
-   virtual void Project()
-   {
    }
 
 protected:
