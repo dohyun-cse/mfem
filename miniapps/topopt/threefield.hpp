@@ -3,26 +3,31 @@
 #include "fem/bilininteg.hpp"
 #include "fem/coefficient.hpp"
 // #include "general/error.hpp"
+#include "fem/gridfunc.hpp"
+#include "general/error.hpp"
 #include "helper.hpp"
 // #include "mfem.hpp"
 
 namespace mfem
 {
 const double LOG_TOL = 1e-12;
-const double LOG_MIN_VAL = std::log(LOG_TOL); 
+const double LOG_MIN_VAL = std::log(LOG_TOL);
 
+// safe log by clipping log value
 inline double safe_log(double x)
 {
-  return x < LOG_TOL ? LOG_MIN_VAL : std::log(x);
+   return x < LOG_TOL ? LOG_MIN_VAL : std::log(x);
 }
 
+// fermi-dirac entropy
 inline double binary_entropy(double x)
 {
    const double logx = safe_log(x);
    const double logy = safe_log(1.0 - x);
-   return -x * logx - (1 - x) * logy;
+   return -x * logx - (1.0 - x) * logy;
 }
 
+// compute 1/(1+exp(-x))
 inline double sigmoid(double x)
 {
    if (x > 0)
@@ -39,14 +44,16 @@ inline double sigmoid(double x)
 inline double sigmoid_derivative(double x)
 {
    const double s = sigmoid(x);
-   return s * (1 - s);
+   return s * (1.0 - s);
 }
 
+// compute log(x/(1-x)) with safe log
 inline double logit(double x)
 {
-  const double y = x < 0.5 ? x / (1.0 - x) : (1.0 - x) / x;
-  const double logy = safe_log(y);
-  return x < 0.5 ? logy : -logy;
+   // avoid divide by 0
+   const double y = x < 0.5 ? x / (1.0 - x) : (1.0 - x) / x;
+   const double logy = safe_log(y);
+   return x < 0.5 ? logy : -logy;
 }
 
 inline double shannon_entropy(double x)
@@ -54,32 +61,169 @@ inline double shannon_entropy(double x)
    return -x * safe_log(x);
 }
 
-inline double exp_double(double x) { return std::exp(x); }
 
-inline double log_double(double x) { return x < LOG_TOL ? -27.6310211159 : std::log(x); }
+enum VolumeSolver
+{
+   Bisection,
+   Brent
+};
+class NonlinearEquationSolver
+{
+protected:
+   std::function<double()> f;
+   double &x;
+   const double tol_res;
+   const double tol_x;
+public:
+   NonlinearEquationSolver(double &x, std::function<double()> f,
+                           double tol_res=1e-08, double tol_x=0):
+      f(f), x(x), tol_res(tol_res), tol_x(tol_x) {}
+   virtual double Solve() = 0;
+};
+class BisectionSolver : public NonlinearEquationSolver
+{
+protected:
+   double xl, xr;
+   bool interval_prescribed=false;
+public:
+   BisectionSolver(double &x, std::function<double()> f, double tol_x,
+                   double tol_res=1e-08): NonlinearEquationSolver(x, f, tol_res, tol_x) {};
+   void SetInterval(double new_xl, double new_xr) {xl = new_xl; xr = new_xr; interval_prescribed=true;}
+   virtual double Solve()
+   {
+      if (!interval_prescribed) { MFEM_ABORT("Search Interval not Prescribed. Set Interval Before each Solve"); }
+      x = xl; double yl = f();
+      x = xr; double yr = f();
+
+      double y;
+      while (xr - xl > tol_x)
+      {
+         x = (xr + xl)*0.5; y = f();
+         if (std::abs(y) < tol_res) { break; }
+
+         if (yl * y > 0) { xl = x; yl = y; }
+         else { xr = x; yr = y; }
+      }
+      return y;
+   }
+};
+
+class BrentSolver : public NonlinearEquationSolver
+{
+protected:
+   double x0, x1;
+   bool interval_prescribed=false;
+public:
+   BrentSolver(double &x, std::function<double()> f, double tol_x,
+               double tol_res=1e-08): NonlinearEquationSolver(x, f, tol_res, tol_x) {};
+   void SetInterval(double new_xl, double new_xr) {x0 = new_xl; x1 = new_xr; interval_prescribed=true;}
+   virtual double Solve()
+   {
+      if (!interval_prescribed) { MFEM_ABORT("Search Interval not Prescribed. Set Interval Before each Solve"); }
+      x = x0; double y0 = f();
+      x = x1; double y1 = f();
+      if (abs(y0) < abs(y1))
+      {
+         std::swap(y0, y1);
+         std::swap(x0, x1);
+      }
+      double x2, x3;
+      double y2;
+      x3 = x2 = x0;
+      y2 = y0;
+      bool bisection = true;
+      double y;
+
+      while (x1 - x0 > tol_x)
+      {
+         if (std::abs(y0 - y2) > tol_res && std::abs(y1 - y2) > tol_res)
+         {
+            x =  x0*y1*y2/((y0-y1)*(y0-y2)) +
+                 x1*y0*y2/((y1-y0)*(y1-y2)) +
+                 x2*y0*y1/((y2-y0)*(y2-y1));
+         }
+         else
+         {
+            x = x1 - y1 * (x1 - x0)/(y1 - y0);
+         }
+         double delta = fabs(2e-12*std::abs(x1));
+         double min1 = std::abs(x - x1);
+         double min2 = std::abs(x1 - x2);
+         double min3 = std::abs(x2 - x3);
+         if ((x < (3*x0 + x1) / 4.0 && x > x1) ||
+             (bisection &&
+              (min1 >= min2*0.5 || min1 >= min3*0.5 || min2 < delta || min3 < delta)))
+         {
+            x = (x0 + x1) * 0.5;
+            bisection = true;
+         }
+         else
+         {
+            bisection = false;
+         }
+         y = f();
+         if (std::abs(y) < tol_res)
+         {
+           return y;
+         }
+         x3 = x2;
+         x2 = x1;
+         if (y0 * y < 0)
+         {
+           x1 = x; y1 = y;
+         }
+         else
+         {
+           x0 = x; y0 = y;
+         }
+         if (std::abs(y0) < std::abs(y1))
+         {
+           std::swap(x0, x1);
+           std::swap(y0, y1);
+         }
+      }
+      return y;
+   }
+};
+
+enum VolConstraint { VOL_MIN=-1, VOL_EQ=0, VOL_MAX=1 };
 
 class DesignDensity
 {
-   enum VolConstraint { VOL_MIN=-1, VOL_EQ, VOL_MAX };
-
 public:
    DesignDensity(FiniteElementSpace &fes, VolConstraint vol_constraint,
                  double vol_frac) : fes(fes), vol_constraint(vol_constraint),
-      vol_frac(vol_frac) {}
+      vol_frac(vol_frac)
+   {
+      density_gf.reset(MakeGridFunction(&fes));
+      grad.reset(MakeGridFunction(&fes));
+      density_cf.reset(new GridFunctionCoefficient(density_gf.get()));
+      grad_cf.reset(new GridFunctionCoefficient(grad.get()));
+   }
+   FiniteElementSpace &GetFE() {return fes;}
+   VolConstraint GetVolConstraint() {return vol_constraint; }
+   double GetVolFrac() {return vol_frac; }
    Coefficient &GetDensityCoefficient()
    {
-      if (!density_coeff) { MFEM_ABORT("Density coefficient is undefined."); }
-      return *density_coeff;
+      if (!density_cf) { MFEM_ABORT("Density coefficient is undefined."); }
+      return *density_cf;
    }
+   GridFunction & GetGradGridFunction() { return *grad; }
+   Coefficient & GetGradCoefficient() {return *grad_cf;}
    virtual void SetAdjointData(Coefficient *dFdrho) = 0;
    void SetVolumeConstraint(VolConstraint new_vol_constraint,
                             double new_vol_frac)
    { vol_constraint = new_vol_constraint; vol_frac = new_vol_frac; }
-   virtual void Project() = 0;
+   virtual void Project()
+   {
+   }
 
 protected:
    FiniteElementSpace &fes;
-   std::unique_ptr<Coefficient> density_coeff;
+   double min_val=0.0, max_val=1.0;
+   std::unique_ptr<Coefficient> density_cf;
+   std::unique_ptr<GridFunction> density_gf, grad;
+   std::unique_ptr<Coefficient> grad_cf;
    VolConstraint vol_constraint;
    double vol_frac;
 };
@@ -88,96 +232,136 @@ class DensityFilter
 {
 public:
    DensityFilter(FiniteElementSpace &fes) : fes(fes) {}
-   Coefficient *GetFilterCoefficient() { return filter_coeff.get(); }
    virtual void SetDensity(Coefficient &rho) = 0;
-   virtual void SetAdjointData(Coefficient &dFdrho) = 0;
-   virtual void UpdateFilter() = 0;
-   virtual void UpdateAdjoint() = 0;
-   virtual void SetBoundary(Array<int> &void_material_bdr_)
+   virtual Coefficient& GetFilteredDensity() = 0;
+   virtual Coefficient& GetFilteredGradient() = 0;
+   virtual void UpdateFilteredDensity(Coefficient &rho) = 0;
+   virtual void UpdateFilteredGradient(Coefficient &dfdrho) = 0;
+   virtual void SetBoundary(Array<int> &void_material_bdr)
    {
-      void_material_bdr = void_material_bdr_;
+      ess_bdr = void_material_bdr;
+      for (auto &v:ess_bdr) { v = v != 0; }
+      void_bdr = void_material_bdr;
+      for (auto &v:void_bdr) { v = v == -1; }
+      material_bdr = void_material_bdr;
+      for (auto &v:material_bdr) { v = v == 1; }
    }
 
 protected:
    FiniteElementSpace &fes;
    std::unique_ptr<Coefficient> filter_coeff;
-   Array<int> void_material_bdr;
+   std::unique_ptr<Coefficient> grad_coeff;
+   Array<int> ess_bdr, void_bdr, material_bdr;
+};
+
+class MappedCoefficient : public Coefficient
+{
+private:
+   Coefficient &cf;
+   std::function<double(double)> f;
+public:
+   MappedCoefficient(Coefficient &cf, std::function<double(double)> f):cf(cf),
+      f(f) {};
+   double Eval(ElementTransformation &T, const IntegrationPoint &ip) override
+   {
+      return f(cf.Eval(T, ip));
+   };
 };
 
 class DifferentiableMap
 {
 public:
-   DifferentiableMap(double (*f)(double), double (*df)(double)) : f(f), df(df) {}
-
-   TransformedCoefficient GetCoefficient(Coefficient *c)
+   DifferentiableMap(std::function<double(double)> f,
+                     std::function<double(double)> df) : f(f), df(df) {}
+   void SetBaseCoefficient(Coefficient &c)
    {
-      return TransformedCoefficient(c, f);
+      f_cf.reset(new MappedCoefficient(c, f));
+      df_cf.reset(new MappedCoefficient(c, df));
+   };
+
+   MappedCoefficient& GetCoefficient()
+   {
+      if (!f_cf) {MFEM_ABORT("Base coefficient is not set. Run SetCoefficient first.");}
+      return *f_cf;
    }
 
-   TransformedCoefficient GetGradient(Coefficient *c)
+   MappedCoefficient& GetGradient()
    {
-      return TransformedCoefficient(c, df);
+      if (!df_cf) {MFEM_ABORT("Base coefficient is not set. Run SetCoefficient first.");}
+      return *df_cf;
+   }
+
+   MappedCoefficient* NewCoefficient(Coefficient &c)
+   {
+      return new MappedCoefficient(c, f);
+   }
+   MappedCoefficient* NewGradCoefficient(Coefficient &c)
+   {
+      return new MappedCoefficient(c, df);
    }
 
 private:
-   double (*f)(double);
-   double (*df)(double);
+   std::function<double(double)> f;
+   std::function<double(double)> df;
+   std::unique_ptr<MappedCoefficient> f_cf, df_cf;
 };
 
-class ThreeFieldDensity
+class ThreeFieldDensity: public DesignDensity
 {
 public:
-   ThreeFieldDensity(DesignDensity &density,
+   ThreeFieldDensity(FiniteElementSpace &fes,
                      DensityFilter &filter,
-                     DifferentiableMap &projector)
-      : density(density), filter(filter),
+                     DifferentiableMap &projector,
+                     VolConstraint vol_constraint,
+                     double vol_frac
+                    )
+      : DesignDensity(fes, vol_constraint, vol_frac), filter(filter),
         projector(projector)
    {
-      filter.SetDensity(density.GetDensityCoefficient());
-      projector.GetCoefficient(filter.GetFilterCoefficient());
+      raw_density_cf.reset(density_cf.release());
+      filter.SetDensity(*raw_density_cf);
+      density_cf.reset(projector.NewCoefficient(filter.GetFilteredDensity()));
    }
-
-   TransformedCoefficient GetPhysicalDensity()
+   virtual void Project()
    {
-      return projector.GetCoefficient(
-                filter.GetFilterCoefficient());
    }
 
 protected:
 private:
 public:
 protected:
-   DesignDensity &density;
+   std::unique_ptr<Coefficient> raw_density_cf;
    DensityFilter &filter;
    DifferentiableMap &projector;
-   std::unique_ptr<TransformedCoefficient> physical_density;
 
 private:
 };
 
-class LegendreFunction
+class LegendreFunction : public DifferentiableMap
 {
 public:
-   LegendreFunction(double (*f)(double), double (*df)(double),
-                    double (*df_inv)(double))
-      : f(f), df(df), df_inv(df_inv) {}
-   TransformedCoefficient GetCoefficient(Coefficient *c)
+   LegendreFunction(std::function<double(double)> f,
+                    std::function<double(double)> df,
+                    std::function<double(double)> df_inv)
+      : DifferentiableMap(f, df), df_inv(df_inv) {}
+   void SetCoefficient(Coefficient &c)
    {
-      return TransformedCoefficient(c, f);
+      DifferentiableMap::SetBaseCoefficient(c);
+      df_inv_cf.reset(new MappedCoefficient(c, df_inv));
    }
-   TransformedCoefficient GetGradient(Coefficient *c)
+   MappedCoefficient &GetPrimal2Dual()
    {
-      return TransformedCoefficient(c, df);
+      return DifferentiableMap::GetGradient();
    }
-   TransformedCoefficient GetGradientInverse(Coefficient *c)
+   MappedCoefficient &GetDual2Primal()
    {
-      return TransformedCoefficient(c, df_inv);
+      if (!df_inv_cf) {MFEM_ABORT("Base coefficient is not set. Run SetCoefficient first.");}
+      return *df_inv_cf;
    }
 
 private:
-   double (*f)(double);
-   double (*df)(double);
-   double (*df_inv)(double);
+   std::function<double(double)> df_inv;
+   std::unique_ptr<MappedCoefficient> df_inv_cf;
 };
 
 inline LegendreFunction FermiDiracEntropy()
@@ -187,7 +371,56 @@ inline LegendreFunction FermiDiracEntropy()
 
 inline LegendreFunction ShannonEntropy()
 {
-   return LegendreFunction(shannon_entropy, log_double, exp_double);
+   return LegendreFunction(shannon_entropy, safe_log, [](double x) {return std::exp(x);});
+}
+
+inline double simp(double x, double x0, double p)
+{
+   return x0 + (1.0-x0)*std::pow(x, p);
+}
+inline double der_simp(double x, double x0, double p)
+{
+   return p*(1.0-x0)*std::pow(x, p-1.0);
+}
+inline DifferentiableMap SIMPProjector(const double &x0, const double &p)
+{
+   DifferentiableMap f([&x0, &p](double x) {return simp(x, x0, p);}, [&x0,
+                                                                      &p](double x) {return der_simp(x, x0, p);});
+   return f;
+}
+
+inline double ramp(double x, double x0, double q)
+{
+   return x0 + (1.0-x0)*x/(1.0 + q*(1.0-x));
+}
+inline double der_ramp(double x, double x0, double q)
+{
+   return (1.0-x0)*(1.0+q)/std::pow(1.0 + q*(1.0-x), 2.0);
+}
+inline DifferentiableMap RAMPProjector(const double &x0, const double &p)
+{
+   DifferentiableMap f([&x0, &p](double x) {return ramp(x, x0, p);}, [&x0,
+                                                                      &p](double x) {return ramp(x, x0, p);});
+   return f;
+}
+
+inline double tanh_proj(double x, double x0, double beta, double eta)
+{
+   const double tanh_be = std::tanh(beta*eta);
+   return x0 + (1.0 - x0)*(tanh_be + std::tanh(beta*(x - eta)))/
+          (tanh_be + std::tanh(beta*(1.0-eta)));
+}
+inline double der_tanh_proj(double x, double x0, double beta, double eta)
+{
+   return beta*std::pow(1.0/std::cosh(beta*(x-eta)),
+                        2.0) / (std::tanh(beta*eta) + std::tanh((1-eta)*beta));
+}
+inline DifferentiableMap TANHProjector(const double &x0, const double &beta,
+                                       const double &eta)
+{
+   DifferentiableMap f([&x0, &beta, &eta](double x) {return tanh_proj(x, x0, beta, eta);}, [&x0,
+         &beta, &eta](double x) {return der_tanh_proj(x, x0, beta, eta);});
+   return f;
 }
 
 // Elliptic Bilinear Solver
@@ -259,102 +492,68 @@ private:
 class HelmholtzFilter : public DensityFilter
 {
 public:
-   HelmholtzFilter(FiniteElementSpace &fes, const double r_min);
-   void SetDensity(Coefficient *rho) override;
-   void SetGradientData(Coefficient *dFdrho, GridFunction &grad) override;
-   void UpdateFilter() override;
-   void UpdateGradient() override;
-   void SetBoundary(Array<int> &void_material_bdr_) override;
-
-private:
-   ConstantCoefficient eps2;
-   Array<int> ess_bdr;
-   std::unique_ptr<BilinearForm> filter_form;
-   std::unique_ptr<EllipticSolver> rho_solver;
-   std::unique_ptr<EllipticSolver> grad_solver;
-   std::unique_ptr<LinearForm> rho_form;
-   std::unique_ptr<LinearForm> grad_form;
-   std::unique_ptr<GridFunction> filter;
-};
-
-class ProximalHelmholtzFilter : public DensityFilter
-{
-   ProximalHelmholtzFilter(FiniteElementSpace &fes, FiniteElementSpace &dual_fes,
-                           const double r_min)
-      : DensityFilter(fes), dual_fes(dual_fes),
-        eps2(r_min * r_min / (4.0 / 3.0))
+   HelmholtzFilter(FiniteElementSpace &fes, const double r_min):
+      DensityFilter(fes), eps2(std::pow(r_min/(2.0*std::sqrt(3)), 2))
    {
-      primal_filter.reset(MakeGridFunction(&fes));
-      dual_filter.reset(MakeGridFunction(&dual_fes));
-      dual_filter_cf.reset(new GridFunctionCoefficient(dual_filter.get()));
-      filter_coeff.reset(
-         new MappedGridFunctionCoefficient(dual_filter.get(), sigmoid));
-
       filter_form.reset(MakeBilinearForm(&fes));
       filter_form->AddDomainIntegrator(new DiffusionIntegrator(eps2));
       filter_form->AddDomainIntegrator(new MassIntegrator());
       filter_form->Assemble();
-      filter_form->Finalize();
 
-      prox_form.reset(MakeMixedBilinearForm(&fes, &dual_fes));
-      prox_form->AddDomainIntegrator(new MixedScalarMassIntegrator());
-      prox_form->Assemble();
-      prox_form->Finalize();
+      filter_rhs.reset(MakeLinearForm(&fes));
 
-      prox_formT.reset(new TransposeOperator(prox_form.get()));
+      elliptic_solver.reset(new EllipticSolver(*filter_form, *filter_rhs));
+      elliptic_solver->SetIterativeMode(true);
 
-      expMass.reset(MakeBilinearForm(&fes));
-      expMass->AddDomainIntegrator(new MassIntegrator(*filter_coeff));
+      filtered_density.reset(MakeGridFunction(&fes));
+      filtered_density_cf.reset(new GridFunctionCoefficient(filtered_density.get()));
 
-      offsets.SetSize(3);
-      offsets[0] = 0;
-      offsets[1] = fes.GetTrueVSize();
-      offsets[2] = dual_fes.GetTrueVSize();
-      offsets.PartialSum();
-
-      saddle_point.reset(new BlockOperator(offsets));
-      saddle_point->SetBlock(0, 0, filter_form.get());
-      saddle_point->SetBlock(1, 0, prox_form.get());
-      saddle_point->SetBlock(0, 1, prox_formT.get());
-      saddle_point->SetBlock(2, 2, expMass.get());
+      filtered_grad.reset(MakeGridFunction(&fes));
+      filtered_grad_cf.reset(new GridFunctionCoefficient(filtered_grad.get()));
    }
-   void SetDensity(Coefficient *rho) override
+   void SetDensity(Coefficient &rho) override
    {
-      alpha_rho.reset(new ProductCoefficient(1.0, *rho));
-      primal_rhs.reset(MakeLinearForm(&fes));
-      primal_rhs->AddDomainIntegrator(new DomainLFIntegrator(*alpha_rho));
-      primal_rhs->AddDomainIntegrator(new DomainLFIntegrator(*dual_filter_cf));
-
-      dual_rhs.reset(MakeLinearForm(&dual_fes));
-      dual_rhs->AddDomainIntegrator(new DomainLFIntegrator(*filter_coeff));
    }
-   void SetGradientData(Coefficient *dFdrho) override {}
-   void UpdateFilter() override
+   Coefficient& GetFilteredDensity() override
    {
-      for (int i = 0; i < 10; i++)
-      {
-      }
+      return *filtered_density_cf;
    }
-   void UpdateGradient() override;
+   Coefficient& GetFilteredGradient() override
+   {
+      return *filtered_grad_cf;
+   }
+   void UpdateFilteredDensity(Coefficient &rho) override
+   {
+      filter_rhs->GetDLFI()->DeleteAll();
+      filter_rhs->AddDomainIntegrator(new DomainLFIntegrator(rho));
+      elliptic_solver->Solve(*filtered_density, true, false);
+   }
+   void UpdateFilteredGradient(Coefficient &dfdrho) override
+   {
+      filter_rhs->GetDLFI()->DeleteAll();
+      filter_rhs->AddDomainIntegrator(new DomainLFIntegrator(dfdrho));
+      elliptic_solver->Solve(*filtered_grad, true, false);
+   }
+   void SetBoundary(Array<int> &void_material_bdr) override
+   {
+      DensityFilter::SetBoundary(void_material_bdr);
+      elliptic_solver->SetEssBoundary(ess_bdr);
+      ConstantCoefficient zero_cf(0.0), one_cf(1.0);
+      // Fix void and material for filter
+      filtered_density->ProjectBdrCoefficient(zero_cf, void_bdr);
+      filtered_density->ProjectBdrCoefficient(one_cf, material_bdr);
+      // Fix all for grad
+      filtered_grad->ProjectBdrCoefficient(zero_cf, ess_bdr);
+   }
 
 private:
    ConstantCoefficient eps2;
-   Array<int> offsets;
-   FiniteElementSpace &dual_fes;
-
-   std::unique_ptr<ProductCoefficient> alpha_rho;
-   std::unique_ptr<GridFunctionCoefficient> dual_filter_cf;
-   std::unique_ptr<BlockOperator> saddle_point;
    std::unique_ptr<BilinearForm> filter_form;
-   std::unique_ptr<MixedBilinearForm> prox_form;
-   std::unique_ptr<TransposeOperator> prox_formT;
-   std::unique_ptr<BilinearForm> expMass;
-   std::unique_ptr<LinearForm> primal_rhs;
-   std::unique_ptr<LinearForm> dual_rhs;
-   std::unique_ptr<GridFunction> primal_filter;
-   std::unique_ptr<GridFunction> dual_filter;
+   std::unique_ptr<LinearForm> filter_rhs;
+   std::unique_ptr<EllipticSolver> elliptic_solver;
+   std::unique_ptr<GridFunction> filtered_density, filtered_grad;
+   std::unique_ptr<GridFunctionCoefficient> filtered_density_cf, filtered_grad_cf;
 };
-
 } // namespace mfem
 
 #endif
