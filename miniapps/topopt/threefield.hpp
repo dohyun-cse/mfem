@@ -1,14 +1,7 @@
 #ifndef THREE_FIELD_HPP
 #define THREE_FIELD_HPP
-#include "fem/bilininteg.hpp"
-#include "fem/coefficient.hpp"
-// #include "general/error.hpp"
-#include "fem/gridfunc.hpp"
-#include "general/error.hpp"
 #include "helper.hpp"
-#include "mpi.h"
-#include "mpi_proto.h"
-// #include "mfem.hpp"
+#include "mfem.hpp"
 
 namespace mfem
 {
