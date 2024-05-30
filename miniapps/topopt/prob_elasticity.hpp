@@ -22,10 +22,10 @@ enum ElasticityProblem
    LBracket=2,
    Cantilever3=3,
    Torsion3=4,
-   MBB_selfloading=5, // below this, everything should be self-loading case
-   Bridge=6,
-   Arch2=7,
-   SelfLoading3=8
+   MBB_selfloading=-1, // below this, everything should be self-loading case
+   Bridge=-2,
+   Arch2=-3,
+   SelfLoading3=-4
 };
 
 void GetElasticityProblem(const ElasticityProblem problem,

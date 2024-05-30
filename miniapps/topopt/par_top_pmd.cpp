@@ -221,6 +221,10 @@ int main(int argc, char *argv[])
    ParGridFunction &psi(
       dynamic_cast<ParGridFunction &>(density.GetGridFunction()));
    rho_filter = density.GetDomainVolume() * vol_fraction;
+   if (problem == ElasticityProblem::Bridge){
+     FunctionCoefficient material_cf([](const Vector &x){return std::exp(std::pow(x[1],4)*15);});
+     psi.ProjectCoefficient(material_cf);
+   }
 
    std::unique_ptr<ParGridFunction> gradH1_selfload;
    std::unique_ptr<ParLinearForm> projected_grad_selfload;
@@ -229,7 +233,7 @@ int main(int argc, char *argv[])
    std::unique_ptr<VectorGridFunctionCoefficient> u_cf;
    std::unique_ptr<GridFunctionCoefficient> rho_filter_cf;
    std::unique_ptr<InnerProductCoefficient> ug;
-   if (problem >= ElasticityProblem::MBB_selfloading)
+   if (problem <= ElasticityProblem::MBB_selfloading)
    {
       Vector g(dim);
       g = 0.0;
@@ -331,6 +335,10 @@ int main(int argc, char *argv[])
       pd->Save();
    }
    double KKT0 = -infinity();
+   ConstantCoefficient const_cf(1e09);
+   Array<int> material_bdr(ess_bdr_filter);
+   for (auto &val : material_bdr) { val = val == 1; }
+
 
    // 11. Iterate
    ParGridFunction old_grad(&control_fes), old_psi(&control_fes);
@@ -422,7 +430,7 @@ int main(int argc, char *argv[])
       compliance = optprob.GetValue();
       volume = density.GetVolume() / density.GetDomainVolume();
       optprob.UpdateGradient();
-      if (problem >= ElasticityProblem::MBB_selfloading)
+      if (problem <= ElasticityProblem::MBB_selfloading)
       {
          filter.Apply(*ug, *gradH1_selfload);
          projected_grad_selfload->Assemble();
