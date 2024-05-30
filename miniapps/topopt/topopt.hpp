@@ -8,12 +8,16 @@
 namespace mfem
 {
 
+inline double safe_log(const double x)
+{
+  return x < 1e-300 ? -700.0 : std::log(x);
+
+}
+
 /// @brief Inverse sigmoid function
 inline double inv_sigmoid(const double x)
 {
-   const double tol = 1e-12;
-   const double tmp = std::min(std::max(tol,x),1.0-tol);
-   return std::log(tmp/(1.0-tmp));
+  return x < 0.5 ? safe_log(x / (1.0 - x)) : -safe_log((1.0 - x) / x);
 }
 
 /// @brief Sigmoid function
@@ -71,23 +75,15 @@ class FermiDirac: public LegendreFunction
 {
 public:
    // Fermi-Dirac function with safe logarithm
-   FermiDirac(const double eps=1e-12):LegendreFunction()
+   FermiDirac():LegendreFunction()
    {
       // Fermi-Dirac
-      SetLegendre([eps](const double x)
+      SetLegendre([](const double x)
       {
-         const double y = 1.0 - x;
-         return (x < eps ? 0 : x*log(x))
-                + (y < eps ? 0 : y*log(y));
+        return x*safe_log(x) + (1.0 - x)*safe_log(1.0 - x);
       });
       // Derivative, logit = log(x/(1-x))
-      SetForwardMap([eps](const double x)
-      {
-         const double y = x > 0.5 ? 1.0 - x : x;
-         const double z = y / (1.0 - y);
-         const double result = z < eps ? std::log(eps) : std::log(z);
-         return x > 0.5 ? -result : result;
-      });
+      SetForwardMap(inv_sigmoid);
       // Inverse of Derivative, sigmoid
       SetInverseMap(sigmoid);
    }
@@ -98,23 +94,17 @@ class Shannon : public LegendreFunction
 {
 public:
    // Shannon entropy, xlog(x) - x
-   Shannon(const double eps):LegendreFunction()
+   Shannon():LegendreFunction()
    {
       // Shannon entropy
-      SetLegendre([eps](const double x)
+      SetLegendre([](const double x)
       {
-         return x < eps ? -x : x*std::log(x) - x;
+         return x*safe_log(x) - x;
       });
       // Derivative, safe log(x)
-      SetForwardMap([eps](const double x)
-      {
-         return x < eps ? std::log(eps) : std::log(x);
-      });
+      SetForwardMap(safe_log);
       // Inverse of Derivative, exp
-      SetInverseMap([](const double x)
-      {
-         return std::exp(x);
-      });
+      SetInverseMap(exp<double>);
    }
 };
 
@@ -129,10 +119,6 @@ inline double ShannonEntropy(const double x)
 {
    return x < 1e-13 ? -x : x*std::log(x) - x;
 }
-// exponential double type
-inline double exp_d(const double x) {return std::exp(x);}
-// log double type
-inline double log_d(const double x) {return std::log(x);}
 // Gradient to symmetric gradient in Voigt notation
 /** Integrator for the isotropic linear elasticity form:
     a(u,v) = (Cu : ϵ(v))

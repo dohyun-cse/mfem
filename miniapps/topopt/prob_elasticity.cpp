@@ -262,8 +262,8 @@ void BridgePreRefine(double &filter_radius, double &vol_fraction,
                      std::unique_ptr<Mesh> &mesh, Array2D<int> &ess_bdr, Array<int> &ess_bdr_filter,
                      std::unique_ptr<VectorCoefficient> &vforce_cf)
 {
-   if (filter_radius < 0) { filter_radius = 0.05; }
-   if (vol_fraction < 0) { vol_fraction = 0.3; }
+   if (filter_radius < 0) { filter_radius = 0.08; }
+   if (vol_fraction < 0) { vol_fraction = 0.2; }
 
    *mesh = Mesh::MakeCartesian2D(2, 1, mfem::Element::Type::QUADRILATERAL, true,
                                  2.0, 1.0);
@@ -273,11 +273,12 @@ void BridgePreRefine(double &filter_radius, double &vol_fraction,
    ess_bdr(1, 3) = 1; // left : y-roller -> x fixed
    ess_bdr(0, 4) = 1; // right-bottom : pin support
    ess_bdr_filter[2] = 1;
+   ess_bdr_filter[5] = -1;
    vforce_cf.reset(new VectorFunctionCoefficient(2, [](const Vector &x,
                                                        Vector &f)
    {
       f = 0.0;
-      if (x[1] > 1.0 - std::pow(2, -5.0)) { f(1) = -std::pow(2, 5); }
+      if (x[1] > 1.0 - std::pow(2, -5.0)) { f(1) = -30.0; }
    }));
 }
 void BridgePostRefine(int ser_ref_levels, int par_ref_levels,
@@ -287,10 +288,8 @@ void BridgePostRefine(int ser_ref_levels, int par_ref_levels,
                        ser_ref_levels + (par_ref_levels < 0 ? 0 : par_ref_levels));
    mesh->MarkBoundary([h](const Vector &x) {return ((x(0) > (2.0 - h)) && (x(1) < 1e-10)); },
    5);
-   // mesh->MarkBoundary([h](const Vector &x) {return (x(1) > 1-1e-10); },
-   // 5);
-   // mesh->MarkBoundary([h](const Vector &x) {return ((x(0) > (2.0 - h)) && (x(1) > 1 - 1e-10)); },
-   // 5);
+   mesh->MarkBoundary([h](const Vector &x) {return (x(0) < 1e-10) && (x(1) < 0.5); },
+   6);
    mesh->SetAttributes();
 }
 

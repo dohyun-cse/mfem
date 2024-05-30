@@ -644,7 +644,8 @@ double LatentDesignDensity::StationarityError(const GridFunction &grad,
 {
    *tmp_gf = *x_gf;
    double volume_backup = current_volume;
-   x_gf->Add(-eps, grad);
+   ConstantCoefficient zero_cf;
+   x_gf->Add(-eps/grad.ComputeL2Error(zero_cf), grad);
    Project();
    double d;
    if (useL2norm)
@@ -678,18 +679,20 @@ double LatentDesignDensity::StationarityErrorL2(GridFunction &grad,
                                                 const double eps)
 {
    double c = 0;
+   ConstantCoefficient zero_cf(0.0);
+   double norm_grad = grad.ComputeL2Error(zero_cf);
    MappedPairGridFunctionCoeffitient projected_rho(x_gf.get(),
-                                                   &grad, [&c, eps, this](double x, double y)
+                                                   &grad, [&c, eps, norm_grad, this](double x, double y)
    {
-      return std::min(1.0, std::max(0.0, d2p(x) - eps*y + c));
+      return std::min(1.0, std::max(0.0, d2p(x) - eps*y/norm_grad + c));
    });
    double old_volume = current_volume;
    current_volume = zero_gf->ComputeL1Error(projected_rho);
    if (VolumeConstraintViolated())
    {
 
-      double c_l = target_volume_fraction - (1.0 - grad.Min());
-      double c_r = target_volume_fraction - (0.0 - grad.Max());
+      double c_l = target_volume_fraction - (1.0 - eps*grad.Min()/norm_grad);
+      double c_r = target_volume_fraction - (0.0 - eps*grad.Max()/norm_grad);
 #ifdef MFEM_USE_MPI
       auto pfes = dynamic_cast<ParFiniteElementSpace*>(x_gf->FESpace());
       if (pfes)

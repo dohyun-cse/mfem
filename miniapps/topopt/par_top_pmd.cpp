@@ -221,10 +221,6 @@ int main(int argc, char *argv[])
    ParGridFunction &psi(
       dynamic_cast<ParGridFunction &>(density.GetGridFunction()));
    rho_filter = density.GetDomainVolume() * vol_fraction;
-   if (problem == ElasticityProblem::Bridge){
-     FunctionCoefficient material_cf([](const Vector &x){return std::exp(std::pow(x[1],4)*15);});
-     psi.ProjectCoefficient(material_cf);
-   }
 
    std::unique_ptr<ParGridFunction> gradH1_selfload;
    std::unique_ptr<ParLinearForm> projected_grad_selfload;
@@ -233,6 +229,8 @@ int main(int argc, char *argv[])
    std::unique_ptr<VectorGridFunctionCoefficient> u_cf;
    std::unique_ptr<GridFunctionCoefficient> rho_filter_cf;
    std::unique_ptr<InnerProductCoefficient> ug;
+   std::unique_ptr<ProductCoefficient> ug_dfrho;
+   std::unique_ptr<SumCoefficient> ug_all;
    if (problem <= ElasticityProblem::MBB_selfloading)
    {
       Vector g(dim);
@@ -244,6 +242,8 @@ int main(int argc, char *argv[])
       self_weight.reset(
          new ScalarVectorProductCoefficient(*rho_filter_cf, *gravity));
       ug.reset(new InnerProductCoefficient(*gravity, *u_cf));
+      ug_dfrho.reset(new ProductCoefficient(*ug, densityProjector.GetDerivative(rho_filter)));
+      ug_all.reset(new SumCoefficient(*ug, *ug_dfrho));
 
       elasticity.GetLinearForm().AddDomainIntegrator(
          new VectorDomainLFIntegrator(*self_weight));
@@ -262,7 +262,7 @@ int main(int argc, char *argv[])
    // 10. Connect to GLVis. Prepare for VisIt output.
    char vishost[] = "localhost";
    int visport = 19916;
-   socketstream sout_SIMP, sout_r, sout_KKT;
+   socketstream sout_frho, sout_r, sout_KKT;
    std::unique_ptr<ParGridFunction> designDensity_gf, rho_gf;
    ParGridFunction KKT_gf(&control_fes);
    if (glvis_visualization)
@@ -273,14 +273,14 @@ int main(int argc, char *argv[])
       designDensity_gf->ProjectCoefficient(
          densityProjector.GetPhysicalDensity(density.GetFilteredDensity()));
       rho_gf->ProjectCoefficient(density.GetDensityCoefficient());
-      sout_SIMP.open(vishost, visport);
-      if (sout_SIMP.is_open())
+      sout_frho.open(vishost, visport);
+      if (sout_frho.is_open())
       {
-         sout_SIMP << "parallel " << num_procs << " " << myid << "\n";
-         sout_SIMP.precision(8);
-         sout_SIMP << "solution\n"
-                   << *pmesh << *designDensity_gf
-                   << "window_title 'Design density r(ρ̃) - PMD " << problem
+         sout_frho << "parallel " << num_procs << " " << myid << "\n";
+         sout_frho.precision(8);
+         sout_frho << "solution\n"
+                   << *pmesh << rho_filter
+                   << "window_title 'Filtered density ρ̃ - PMD " << problem
                    << "'\n"
                    << "keys Rjl***************\n"
                    << flush;
@@ -292,7 +292,7 @@ int main(int argc, char *argv[])
          sout_r << "parallel " << num_procs << " " << myid << "\n";
          sout_r.precision(8);
          sout_r << "solution\n"
-                << *pmesh << *rho_gf << "window_title 'Raw density ρ - PMD "
+                << *pmesh << psi << "window_title 'Raw density ρ - PMD "
                 << problem << "'\n"
                 << "keys Rjl***************\n"
                 << flush;
@@ -379,11 +379,11 @@ int main(int argc, char *argv[])
    TableLogger logger;
    logger.Append(std::string("Volume"), volume);
    logger.Append(std::string("Compliance"), compliance);
-   logger.Append(std::string("Stationarity (Rel)"), relative_stationarity);
+   logger.Append(std::string("Stationarity"), stationarityError);
    logger.Append(std::string("Re-evel"), num_reeval);
    logger.Append(std::string("Step Size"), step_size);
-   logger.Append(std::string("Stationarity-Bregman (Rel)"),
-                 relative_stationarity_bregman);
+   logger.Append(std::string("Stationarity-Bregman"),
+                 stationarityError_bregman);
    logger.Append(std::string("KKT"), KKT);
    logger.SaveWhenPrint(filename_prefix.str());
    logger.Print();
@@ -404,6 +404,7 @@ int main(int argc, char *argv[])
             old_psi -= psi;
             old_grad -= grad;
             step_size = std::fabs(diff_rho_form(old_psi) / diff_rho_form(old_grad));
+            if (!isfinite(step_size)) { step_size = 1e04; }
          }
       }
       else
@@ -438,47 +439,20 @@ int main(int argc, char *argv[])
       }
 
       // Step 4. Visualization
-      if (rho_gf)
-      {
-         // rho_gf->ProjectDiscCoefficient(density.GetDensityCoefficient(),
-         //                                GridFunction::AvgType::ARITHMETIC);
-         // MappedGridFunctionCoefficient bdr_rho(&psi, [](double x)
-         // {
-         //    return x > 0.0 ? 0.0 : sigmoid(x);
-         // });
-         // Array<int> bdr(ess_bdr_filter);
-         // bdr = 1;
-         // for (int i=0; i<bdr.Size(); i++)
-         // {
-         //    for (int j=0; j<ess_bdr.NumRows(); j++)
-         //    {
-         //       if (ess_bdr(j, i))
-         //       {
-         //          bdr[i] = 0;
-         //       }
-         //    }
-         // }
-         // rho_gf->ProjectBdrCoefficient(bdr_rho, bdr);
-         // rho_gf->ProjectCoefficient(density.GetDensityCoefficient());
-         for (int i = 0; i < rho_gf->Size(); i++)
-         {
-            (*rho_gf)(i) = sigmoid(psi[i]);
-         }
-      }
       if (glvis_visualization)
       {
-         if (sout_SIMP.is_open())
+         if (sout_frho.is_open())
          {
             // designDensity_gf->ProjectCoefficient(densityProjector.GetPhysicalDensity(
             //                                         density.GetFilteredDensity()));
-            sout_SIMP << "parallel " << num_procs << " " << myid << "\n";
-            sout_SIMP << "solution\n" << *pmesh << rho_filter << flush;
+            sout_frho << "parallel " << num_procs << " " << myid << "\n";
+            sout_frho << "solution\n" << *pmesh << rho_filter << flush;
             MPI_Barrier(MPI_COMM_WORLD); // try to prevent streams from mixing
          }
          if (sout_r.is_open())
          {
             sout_r << "parallel " << num_procs << " " << myid << "\n";
-            sout_r << "solution\n" << *pmesh << *rho_gf << flush;
+            sout_r << "solution\n" << *pmesh << psi << flush;
             MPI_Barrier(MPI_COMM_WORLD); // try to prevent streams from mixing
          }
          if (sout_KKT.is_open())
@@ -496,8 +470,8 @@ int main(int argc, char *argv[])
       }
 
       // Check convergence
-      stationarityError = density.StationarityErrorL2(grad);
-      stationarityError_bregman = density.StationarityError(grad);
+      stationarityError = density.StationarityErrorL2(grad, 1e-03/(grad*grad));
+      stationarityError_bregman = density.StationarityError(grad, 1e-03/(grad*grad));
 
       {
          der_sig_form.Assemble();
@@ -526,24 +500,24 @@ int main(int argc, char *argv[])
          stationarityError_bregman / stationarityError_bregman0;
       logger.Print();
 
-      // if ((use_bregman ? relative_stationarity_bregman : relative_stationarity)
-      // <
-      //     tol_stationarity &&
-      //     std::fabs((old_compliance - compliance)/compliance) < tol_compliance)
-      // {
-      //    converged = true;
-      //    if (Mpi::Root()) { mfem::out << "Total number of iteration = " << k +
-      //    1 << std::endl; } break;
-      // }
-      if (KKT < 1e-04)
+      if ((use_bregman ? relative_stationarity_bregman : relative_stationarity)
+      <
+          tol_stationarity &&
+          std::fabs((old_compliance - compliance)/compliance) < tol_compliance)
       {
          converged = true;
-         if (Mpi::Root())
-         {
-            mfem::out << "Total number of iteration = " << k + 1 << std::endl;
-         }
-         break;
+         if (Mpi::Root()) { mfem::out << "Total number of iteration = " << k +
+         1 << std::endl; } break;
       }
+      // if (KKT < 1e-04)
+      // {
+      //    converged = true;
+      //    if (Mpi::Root())
+      //    {
+      //       mfem::out << "Total number of iteration = " << k + 1 << std::endl;
+      //    }
+      //    break;
+      // }
    }
    if (!converged)
    {
