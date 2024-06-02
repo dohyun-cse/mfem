@@ -150,7 +150,7 @@ void GetElasticityProblem(const ElasticityProblem problem,
          SelfLoading3PreRefine(filter_radius, vol_fraction, mesh, ess_bdr,
                                ess_bdr_filter,
                                vforce_cf);
-         uniformRefine(mesh, ref_levels, par_ref_levels);
+         uniformRefine(mesh, 0, 0);
          SelfLoading3PostRefine(ref_levels, par_ref_levels, mesh);
       } break;
 
@@ -262,7 +262,7 @@ void BridgePreRefine(double &filter_radius, double &vol_fraction,
                      std::unique_ptr<Mesh> &mesh, Array2D<int> &ess_bdr, Array<int> &ess_bdr_filter,
                      std::unique_ptr<VectorCoefficient> &vforce_cf)
 {
-   if (filter_radius < 0) { filter_radius = 0.08; }
+   if (filter_radius < 0) { filter_radius = 0.05; }
    if (vol_fraction < 0) { vol_fraction = 0.2; }
 
    *mesh = Mesh::MakeCartesian2D(2, 1, mfem::Element::Type::QUADRILATERAL, true,
@@ -288,7 +288,7 @@ void BridgePostRefine(int ser_ref_levels, int par_ref_levels,
                        ser_ref_levels + (par_ref_levels < 0 ? 0 : par_ref_levels));
    mesh->MarkBoundary([h](const Vector &x) {return ((x(0) > (2.0 - h)) && (x(1) < 1e-10)); },
    5);
-   mesh->MarkBoundary([h](const Vector &x) {return (x(0) < 1e-10) && (x(1) < 0.5); },
+   mesh->MarkBoundary([h](const Vector &x) {return ((x(0) < 1e-10) && (x(1) < 0.8)); },
    6);
    mesh->SetAttributes();
 }
@@ -457,7 +457,7 @@ void SelfLoading3PreRefine(double &filter_radius, double &vol_fraction,
                            std::unique_ptr<VectorCoefficient> &vforce_cf)
 {
    if (filter_radius < 0) { filter_radius = 5e-02; }
-   if (vol_fraction < 0) { vol_fraction = 0.07; }
+   if (vol_fraction < 0) { vol_fraction = 0.15; }
 
    // [1: bottom,
    //  2: front,
@@ -465,16 +465,17 @@ void SelfLoading3PreRefine(double &filter_radius, double &vol_fraction,
    //  4: back,
    //  5: left,
    //  6: top
-   //  7: (1,1,0)]
-   *mesh = Mesh::MakeCartesian3D(2, 2, 1, mfem::Element::Type::HEXAHEDRON,
-                                 2.0, 2.0, 1.0, false);
+   //  7: (2,2,0)]
+   *mesh = Mesh::MakeCartesian3D(50, 50, 50, mfem::Element::Type::HEXAHEDRON,
+                                 1.0, 1.0, 1.0, false);
    ess_bdr.SetSize(4, 7);
    ess_bdr_filter.SetSize(7);
    ess_bdr = 0;
    ess_bdr(2, 2 - 1) = 1;// front - xz-roller plane
    ess_bdr(1, 5 - 1) = 1;// left - yz-roller plane
-   ess_bdr(0, 6) = 1;// corner - pin
+   ess_bdr(0, 7 - 1) = 1;// corner - pin
    ess_bdr_filter = 0;
+   ess_bdr_filter[5] = -1;
 
    const Vector zero({0.0, 0.0, 0.0});
    vforce_cf.reset(new VectorConstantCoefficient(zero));
@@ -483,8 +484,8 @@ void SelfLoading3PostRefine(int ser_ref_levels, int par_ref_levels,
                             std::unique_ptr<Mesh> &mesh)
 {
    // left center: Dirichlet
-   const double lv = ser_ref_levels + std::max((double)par_ref_levels, 0.0);
-   mesh->MarkBoundary([lv](const Vector &x) { return (x[0] > 2.0 - std::pow(0.5, lv)) && (x[1] > 2.0 - std::pow(0.5, lv)) && (x[2] < 1e-10); },
+   // const double lv = ser_ref_levels + std::max((double)par_ref_levels, 0.0);
+   mesh->MarkBoundary([](const Vector &x) { return (x[0] > 1.0 - 0.02) && (x[1] > 1.0 - 0.02) && (x[2] < 1e-10); },
    7);
    mesh->SetAttributes();
 }

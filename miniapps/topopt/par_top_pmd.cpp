@@ -19,8 +19,7 @@
 //              ρ_new = sigmoid(ψ_new) = sigmoid(ψ_cur - α ∇F(ρ_cur) + c)
 //
 //              where c is a constant volume correction. The step size α is
-//              determined by a generalized Barzilai-Borwein method with
-//              Armijo condition check
+//              determined by a generalized Barzilai-Borwein method with Armijo condition check
 //
 //              BB:        α_init = |(δψ, δρ) / (δ∇F(ρ), δρ)|
 //
@@ -178,7 +177,7 @@ int main(int argc, char *argv[])
 
    // 4. Define the necessary finite element spaces on the mesh.
    H1_FECollection state_fec(order, dim);  // space for u
-   H1_FECollection filter_fec(order, dim); // space for ρ̃
+   H1_FECollection filter_fec(order, dim); // space for ρ̃ 
    L2_FECollection control_fec(order - 1, dim,
                                BasisType::GaussLobatto); // space for ψ
    ParFiniteElementSpace state_fes(pmesh.get(), &state_fec, dim,
@@ -327,7 +326,7 @@ int main(int argc, char *argv[])
       pd->RegisterField("state", &u);
       pd->RegisterField("rho", rho_gf.get());
       pd->RegisterField("frho", &rho_filter);
-      pd->SetLevelsOfDetail(order + 3);
+      pd->SetLevelsOfDetail(order);
       pd->SetDataFormat(VTKFormat::BINARY);
       pd->SetHighOrderOutput(order > 1);
       pd->SetCycle(0);
