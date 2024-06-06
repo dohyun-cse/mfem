@@ -19,7 +19,8 @@
 //              ρ_new = sigmoid(ψ_new) = sigmoid(ψ_cur - α ∇F(ρ_cur) + c)
 //
 //              where c is a constant volume correction. The step size α is
-//              determined by a generalized Barzilai-Borwein method with Armijo condition check
+//              determined by a generalized Barzilai-Borwein method with Armijo
+//              condition check
 //
 //              BB:        α_init = |(δψ, δρ) / (δ∇F(ρ), δρ)|
 //
@@ -38,12 +39,12 @@
 //     based on Helmholtz‐type differential equations. International Journal
 //     for Numerical Methods in Engineering, 86(6), 765-781.
 
-#include "mfem.hpp"
-#include <iostream>
-#include <fstream>
-#include "topopt.hpp"
 #include "helper.hpp"
+#include "mfem.hpp"
 #include "prob_elasticity.hpp"
+#include "topopt.hpp"
+#include <fstream>
+#include <iostream>
 
 using namespace std;
 using namespace mfem;
@@ -117,10 +118,10 @@ int main(int argc, char *argv[])
                   "--positive-bregman-condition",
                   "Use Armijo condition for step size selection. Otherwise, use "
                   "positivity of bregman divergence");
-   args.AddOption(&use_GBB, "-gbb", "--use-gbb", "-exp",
-                  "--exponential-stepsize",
-                  "Use Generalized Barzilai-Borwein step size selection. Otherwise, use "
-                  "exponential step size");
+   args.AddOption(
+      &use_GBB, "-gbb", "--use-gbb", "-exp", "--exponential-stepsize",
+      "Use Generalized Barzilai-Borwein step size selection. Otherwise, use "
+      "exponential step size");
    args.Parse();
    if (!args.Good())
    {
@@ -177,7 +178,7 @@ int main(int argc, char *argv[])
 
    // 4. Define the necessary finite element spaces on the mesh.
    H1_FECollection state_fec(order, dim);  // space for u
-   H1_FECollection filter_fec(order, dim); // space for ρ̃ 
+   H1_FECollection filter_fec(order, dim); // space for ρ̃
    L2_FECollection control_fec(order - 1, dim,
                                BasisType::GaussLobatto); // space for ψ
    ParFiniteElementSpace state_fes(pmesh.get(), &state_fec, dim,
@@ -241,7 +242,8 @@ int main(int argc, char *argv[])
       self_weight.reset(
          new ScalarVectorProductCoefficient(*rho_filter_cf, *gravity));
       ug.reset(new InnerProductCoefficient(*gravity, *u_cf));
-      ug_dfrho.reset(new ProductCoefficient(*ug, densityProjector.GetDerivative(rho_filter)));
+      ug_dfrho.reset(new ProductCoefficient(
+                        *ug, densityProjector.GetDerivative(rho_filter)));
       ug_all.reset(new SumCoefficient(*ug, *ug_dfrho));
 
       elasticity.GetLinearForm().AddDomainIntegrator(
@@ -279,8 +281,7 @@ int main(int argc, char *argv[])
          sout_frho.precision(8);
          sout_frho << "solution\n"
                    << *pmesh << rho_filter
-                   << "window_title 'Filtered density ρ̃ - PMD " << problem
-                   << "'\n"
+                   << "window_title 'Filtered density ρ̃ - PMD " << problem << "'\n"
                    << "keys Rjl***************\n"
                    << flush;
          MPI_Barrier(MPI_COMM_WORLD); // try to prevent streams from mixing
@@ -291,8 +292,8 @@ int main(int argc, char *argv[])
          sout_r << "parallel " << num_procs << " " << myid << "\n";
          sout_r.precision(8);
          sout_r << "solution\n"
-                << *pmesh << psi << "window_title 'Raw density ρ - PMD "
-                << problem << "'\n"
+                << *pmesh << psi << "window_title 'Raw density ρ - PMD " << problem
+                << "'\n"
                 << "keys Rjl***************\n"
                 << flush;
          MPI_Barrier(MPI_COMM_WORLD); // try to prevent streams from mixing
@@ -303,8 +304,8 @@ int main(int argc, char *argv[])
          sout_KKT << "parallel " << num_procs << " " << myid << "\n";
          sout_KKT.precision(8);
          sout_KKT << "solution\n"
-                  << *pmesh << KKT_gf << "window_title 'KKT - PMD "
-                  << problem << "'\n"
+                  << *pmesh << KKT_gf << "window_title 'KKT - PMD " << problem
+                  << "'\n"
                   << "keys Rjl***************\n"
                   << flush;
          MPI_Barrier(MPI_COMM_WORLD); // try to prevent streams from mixing
@@ -336,8 +337,10 @@ int main(int argc, char *argv[])
    double KKT0 = -infinity();
    ConstantCoefficient const_cf(1e09);
    Array<int> material_bdr(ess_bdr_filter);
-   for (auto &val : material_bdr) { val = val == 1; }
-
+   for (auto &val : material_bdr)
+   {
+      val = val == 1;
+   }
 
    // 11. Iterate
    ParGridFunction old_grad(&control_fes), old_psi(&control_fes);
@@ -365,6 +368,12 @@ int main(int argc, char *argv[])
 
    double compliance = optprob.Eval();
    optprob.UpdateGradient();
+   if (problem <= ElasticityProblem::MBB_selfloading)
+   {
+      filter.Apply(*ug, *gradH1_selfload);
+      projected_grad_selfload->Assemble();
+      grad.Add(2.0, *projected_grad_selfload);
+   }
    double step_size(1.0),
           volume(density.GetVolume() / density.GetDomainVolume()),
           stationarityError(density.StationarityErrorL2(grad)),
@@ -381,8 +390,7 @@ int main(int argc, char *argv[])
    logger.Append(std::string("Stationarity"), stationarityError);
    logger.Append(std::string("Re-evel"), num_reeval);
    logger.Append(std::string("Step Size"), step_size);
-   logger.Append(std::string("Stationarity-Bregman"),
-                 stationarityError_bregman);
+   logger.Append(std::string("Stationarity-Bregman"), stationarityError_bregman);
    logger.Append(std::string("KKT"), KKT);
    logger.SaveWhenPrint(filename_prefix.str());
    logger.Print();
@@ -403,7 +411,10 @@ int main(int argc, char *argv[])
             old_psi -= psi;
             old_grad -= grad;
             step_size = std::fabs(diff_rho_form(old_psi) / diff_rho_form(old_grad));
-            if (!isfinite(step_size)) { step_size = 1e04; }
+            if (!isfinite(step_size))
+            {
+               step_size = 1e04;
+            }
          }
       }
       else
@@ -469,8 +480,10 @@ int main(int argc, char *argv[])
       }
 
       // Check convergence
-      stationarityError = density.StationarityErrorL2(grad, 1e-03/(grad*grad));
-      stationarityError_bregman = density.StationarityError(grad, 1e-03/(grad*grad));
+      stationarityError =
+         density.StationarityErrorL2(grad, 1e-03 / (grad * grad));
+      stationarityError_bregman =
+         density.StationarityError(grad, 1e-03 / (grad * grad));
 
       {
          der_sig_form.Assemble();
@@ -490,7 +503,10 @@ int main(int argc, char *argv[])
          }
          MPI_Barrier(pmesh->GetComm());
          KKT = KKT_gf.ComputeLpError(1, zero_cf);
-         if (KKT0 == -infinity()) { KKT0 = KKT; }
+         if (KKT0 == -infinity())
+         {
+            KKT0 = KKT;
+         }
          KKT = KKT / KKT0;
       }
 
@@ -499,14 +515,17 @@ int main(int argc, char *argv[])
          stationarityError_bregman / stationarityError_bregman0;
       logger.Print();
 
-      if ((use_bregman ? relative_stationarity_bregman : relative_stationarity)
-      <
+      if ((use_bregman ? relative_stationarity_bregman : relative_stationarity) <
           tol_stationarity &&
-          std::fabs((old_compliance - compliance)/compliance) < tol_compliance)
+          std::fabs((old_compliance - compliance) / compliance) <
+          tol_compliance)
       {
          converged = true;
-         if (Mpi::Root()) { mfem::out << "Total number of iteration = " << k +
-         1 << std::endl; } break;
+         if (Mpi::Root())
+         {
+            mfem::out << "Total number of iteration = " << k + 1 << std::endl;
+         }
+         break;
       }
       // if (KKT < 1e-04)
       // {
