@@ -456,8 +456,8 @@ void SelfLoading3PreRefine(double &filter_radius, double &vol_fraction,
                            std::unique_ptr<Mesh> &mesh, Array2D<int> &ess_bdr, Array<int> &ess_bdr_filter,
                            std::unique_ptr<VectorCoefficient> &vforce_cf)
 {
-   if (filter_radius < 0) { filter_radius = 5e-02; }
-   if (vol_fraction < 0) { vol_fraction = 0.15; }
+   if (filter_radius < 0) { filter_radius = 0.1; }
+   if (vol_fraction < 0) { vol_fraction = 0.2; }
 
    // [1: bottom,
    //  2: front,
@@ -475,7 +475,9 @@ void SelfLoading3PreRefine(double &filter_radius, double &vol_fraction,
    ess_bdr(1, 5 - 1) = 1;// left - yz-roller plane
    ess_bdr(0, 7 - 1) = 1;// corner - pin
    ess_bdr_filter = 0;
-   ess_bdr_filter[5] = -1;
+   ess_bdr_filter[3 - 1] = -1;
+   ess_bdr_filter[4 - 1] = -1;
+   ess_bdr_filter[6 - 1] = -1;
 
    const Vector zero({0.0, 0.0, 0.0});
    vforce_cf.reset(new VectorConstantCoefficient(zero));
