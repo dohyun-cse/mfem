@@ -59,12 +59,13 @@ class FluxFunction
 public:
    const int num_equations;
    const int dim;
+   const int sdim;
 
-   FluxFunction(const int num_equations, const int dim)
-      : num_equations(num_equations), dim(dim)
+   FluxFunction(const int num_equations, const int dim, const int sdim=-1)
+      : num_equations(num_equations), dim(dim), sdim(sdim < 0 ? dim : sdim)
    {
 #ifndef MFEM_THREAD_SAFE
-      flux.SetSize(num_equations, dim);
+      flux.SetSize(num_equations, sdim);
 #endif
    }
 
@@ -92,7 +93,7 @@ public:
     * @return real_t maximum (normal) characteristic velocity
     */
    virtual real_t ComputeFluxDotN(const Vector &state, const Vector &normal,
-                                  FaceElementTransformations &Tr,
+                                  ElementTransformation &Tr,
                                   Vector &fluxDotN) const;
 
    /**
@@ -375,7 +376,7 @@ public:
     * @return real_t maximum characteristic speed, |u| + √(γp/ρ)
     */
    real_t ComputeFluxDotN(const Vector &state, const Vector &normal,
-                          FaceElementTransformations &Tr,
+                          ElementTransformation &Tr,
                           Vector &fluxN) const override;
 };
 
@@ -418,7 +419,7 @@ public:
     * @return real_t maximum characteristic speed, |u| + √(γp/ρ)
     */
    real_t ComputeFluxDotN(const Vector &x, const Vector &normal,
-                          FaceElementTransformations &Tr,
+                          ElementTransformation &Tr,
                           Vector &fluxN) const override;
 };
 

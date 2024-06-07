@@ -33,15 +33,15 @@ void HyperbolicFormIntegrator::AssembleElementVector(const FiniteElement &el,
    // shape function value at an integration point
    Vector shape(dof);
    // derivative of shape function at an integration point
-   DenseMatrix dshape(dof, el.GetDim());
+   DenseMatrix dshape(dof, fluxFunction.sdim);
    // state value at an integration point
    Vector state(num_equations);
    // flux value at an integration point
-   DenseMatrix flux(num_equations, el.GetDim());
+   DenseMatrix flux(num_equations, fluxFunction.sdim);
 #else
    // resize shape and gradient shape storage
    shape.SetSize(dof);
-   dshape.SetSize(dof, el.GetDim());
+   dshape.SetSize(dof, fluxFunction.sdim);
 #endif
 
    // setDegree-up output vector
@@ -98,7 +98,7 @@ void HyperbolicFormIntegrator::AssembleFaceVector(
    // shape function value at an integration point - second elem
    Vector shape2(dof2);
    // normal vector (usually not a unit vector)
-   Vector nor(el1.GetDim());
+   Vector nor(fluxFunction.sdim);
    // state value at an integration point - first elem
    Vector state1(num_equations);
    // state value at an integration point - second elem
@@ -179,17 +179,17 @@ HyperbolicFormIntegrator::HyperbolicFormIntegrator(
 {
 #ifndef MFEM_THREAD_SAFE
    state.SetSize(num_equations);
-   flux.SetSize(num_equations, fluxFunction.dim);
+   flux.SetSize(num_equations, fluxFunction.sdim);
    state1.SetSize(num_equations);
    state2.SetSize(num_equations);
    fluxN.SetSize(num_equations);
-   nor.SetSize(fluxFunction.dim);
+   nor.SetSize(fluxFunction.sdim);
 #endif
 }
 
 real_t FluxFunction::ComputeFluxDotN(const Vector &U,
                                      const Vector &normal,
-                                     FaceElementTransformations &Tr,
+                                     ElementTransformation &Tr,
                                      Vector &FUdotN) const
 {
 #ifdef MFEM_THREAD_SAFE
@@ -208,8 +208,8 @@ real_t RusanovFlux::Eval(const Vector &state1, const Vector &state2,
 #ifdef MFEM_THREAD_SAFE
    Vector fluxN1(fluxFunction.num_equations), fluxN2(fluxFunction.num_equations);
 #endif
-   const real_t speed1 = fluxFunction.ComputeFluxDotN(state1, nor, Tr, fluxN1);
-   const real_t speed2 = fluxFunction.ComputeFluxDotN(state2, nor, Tr, fluxN2);
+   const real_t speed1 = fluxFunction.ComputeFluxDotN(state1, nor, *Tr.Elem1, fluxN1);
+   const real_t speed2 = fluxFunction.ComputeFluxDotN(state2, nor, *Tr.Elem2, fluxN2);
    // NOTE: nor in general is not a unit normal
    const real_t maxE = std::max(speed1, speed2);
    // here, std::sqrt(nor*nor) is multiplied to match the scale with fluxN
@@ -274,7 +274,7 @@ real_t ShallowWaterFlux::ComputeFlux(const Vector &U,
 
 real_t ShallowWaterFlux::ComputeFluxDotN(const Vector &U,
                                          const Vector &normal,
-                                         FaceElementTransformations &Tr,
+                                         ElementTransformation &Tr,
                                          Vector &FUdotN) const
 {
    const real_t height = U(0);
@@ -348,7 +348,7 @@ real_t EulerFlux::ComputeFlux(const Vector &U,
 
 real_t EulerFlux::ComputeFluxDotN(const Vector &x,
                                   const Vector &normal,
-                                  FaceElementTransformations &Tr,
+                                  ElementTransformation &Tr,
                                   Vector &FUdotN) const
 {
    // 1. Get states
