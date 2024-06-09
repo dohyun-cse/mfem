@@ -255,7 +255,7 @@ Mesh SWEMesh(const int problem)
          Mesh mesh("../data/periodic-square.mesh");
          mesh.Transform([](const Vector &x, Vector &y)
          {
-            y = x; y *= 10;
+            y = x; y *= 20;
          });
          return mesh;
       }
