@@ -173,6 +173,7 @@ private:
    Vector state;              // state value at an integration point
    DenseMatrix flux;          // flux value at an integration point
    DenseMatrix dshape;  // derivative of shape function at an integration point
+   DenseMatrix dphysshape;  // derivative of shape function at an integration point
 
    Vector shape1;  // shape function value at an integration point - first elem
    Vector shape2;  // shape function value at an integration point - second elem

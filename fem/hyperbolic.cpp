@@ -41,8 +41,10 @@ void HyperbolicFormIntegrator::AssembleElementVector(const FiniteElement &el,
 #else
    // resize shape and gradient shape storage
    shape.SetSize(dof);
-   dshape.SetSize(dof, fluxFunction.sdim);
+   dshape.SetSize(dof, fluxFunction.dim);
+   dphysshape.SetSize(dof, fluxFunction.sdim);
 #endif
+   const bool isManifold = fluxFunction.dim != fluxFunction.sdim;
 
    // setDegree-up output vector
    elvect.SetSize(dof * num_equations);
@@ -68,7 +70,9 @@ void HyperbolicFormIntegrator::AssembleElementVector(const FiniteElement &el,
       Tr.SetIntPoint(&ip);
 
       el.CalcShape(ip, shape);
-      el.CalcPhysDShape(Tr, dshape);
+      el.CalcDShape(ip, dshape);
+      Mult(dshape, Tr.AdjugateJacobian(), dphysshape);
+      
       // compute current state value with given shape function values
       elfun_mat.MultTranspose(shape, state);
       // compute F(u,x) and point maximum characteristic speed
@@ -76,8 +80,9 @@ void HyperbolicFormIntegrator::AssembleElementVector(const FiniteElement &el,
       const real_t mcs = fluxFunction.ComputeFlux(state, Tr, flux);
       // update maximum characteristic speed
       max_char_speed = std::max(mcs, max_char_speed);
+      real_t w = ip.weight / (isManifold ? Tr.Weight() : 1.0);
       // integrate (F(u,x), grad v)
-      AddMult_a_ABt(ip.weight * Tr.Weight(), dshape, flux, elvect_mat);
+      AddMult_a_ABt(w, dphysshape, flux, elvect_mat);
    }
 }
 
