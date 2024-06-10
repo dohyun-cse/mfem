@@ -37,13 +37,16 @@ private:
    void UpdateDirection(ElementTransformation &Tr) const
    {
       Tr.Transform(Tr.GetIntPoint(), phys_coord);
-      phys_coord *= 1.0 / (phys_coord * phys_coord);
+      phys_coord *= 1.0 / std::sqrt(phys_coord * phys_coord);
+
       Vector dir1, dir2;
       dir.GetColumnReference(0, dir1);
       dir.GetColumnReference(1, dir2);
       dir1 = 0.0;
       dir1[2] = 1.0;
       dir1.Add(-(dir1*phys_coord), phys_coord);
+      dir1 *= 1.0 / std::sqrt(dir1*dir1);
+
       dir1.cross3D(phys_coord, dir2);
    }
 
@@ -56,7 +59,7 @@ public:
     * @param g gravity constant
     */
    SphericalSWFlux(const real_t g=9.8)
-      : FluxFunction(2 + 1, 2, 3), g(g), dir(3,2), phys_coord(3), FU_tan(3, 2) {}
+      : FluxFunction(1 + 2, 2, 3), g(g), dir(3,2), phys_coord(3), FU_tan(1 + 2, 2) {}
 
    /**
     * @brief Compute F(h, hu)
@@ -88,6 +91,7 @@ public:
 
       const real_t sound = std::sqrt(g * height);
       const real_t vel = std::sqrt(h_vel * h_vel) / height;
+
       UpdateDirection(Tr);
       MultABt(FU_tan, dir, FU);
 
@@ -320,7 +324,7 @@ Mesh SWEMesh(const int problem)
    {
       case 1:
       {
-         Mesh mesh("../data/.mesh");
+         Mesh mesh("../data/square-sphere.mesh");
          mesh.Transform([](const Vector &x, Vector &y)
          {
             y = x; y *= 20;
@@ -343,8 +347,9 @@ VectorFunctionCoefficient SWEInitialCondition(const int problem)
             const real_t sigma = 5;
             const real_t h_min = 6.00;
             const real_t h_max = 10.0;
+            Vector northPole({0.0, 0.0, 20.0});
             u = 0.0;
-            u(0) = h_min + (h_max - h_min)*std::exp(-(x*x) / (sigma * sigma));
+            u(0) = h_min + (h_max - h_min)*std::exp(-x.DistanceSquaredTo(northPole) / (sigma * sigma));
          });
       default:
          MFEM_ABORT("Problem Undefined");

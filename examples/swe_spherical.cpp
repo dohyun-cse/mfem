@@ -1,6 +1,6 @@
 //                                MFEM Example 18 - Parallel Version
 //
-// Compile with: make swe 
+// Compile with: make swe
 //
 // Sample runs:
 //
@@ -52,7 +52,7 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
-#include "swe.hpp"
+#include "swe_spherical.hpp"
 
 using namespace std;
 using namespace mfem;
@@ -143,6 +143,11 @@ int main(int argc, char *argv[])
    {
       pmesh.UniformRefinement();
    }
+   pmesh.Transform([](const Vector &x, Vector &y)
+   {
+      y = x;
+      y *= 20.0 / std::sqrt(y*y);
+   });
 
    // 3. Define the ODE solver used for time integration. Several explicit
    //    Runge-Kutta methods are available.
@@ -209,12 +214,12 @@ int main(int argc, char *argv[])
    }
 
    // 6. Set up the nonlinear form with shallow water flux and numerical flux
-   ShallowWaterFlux flux(dim, 9.8);
+   SphericalSWFlux flux(9.8);
    RusanovFlux numericalFlux(flux);
    DGHyperbolicConservationLaws swe(
       vfes, std::unique_ptr<HyperbolicFormIntegrator>(
          new HyperbolicFormIntegrator(numericalFlux, IntOrderOffset)),
-      preassembleWeakDiv);
+      false);
 
    // 7. Visualize momentum with its magnitude
    socketstream sout;
