@@ -55,20 +55,22 @@ public:
       :FluxFunction(fluxFunction.num_equations, fluxFunction.dim, fluxFunction.sdim),
        fluxFunction(fluxFunction), dir(sdim, dim), FU_tan(num_equations, dim) {}
 
-   real_t ComputeFlux(const Vector &state, ElementTransformation &Tr, DenseMatrix &flux) const override
+   real_t ComputeFlux(const Vector &state, ElementTransformation &Tr,
+                      DenseMatrix &flux) const override
    {
-     real_t speed = fluxFunction.ComputeFlux(state, Tr, FU_tan);
-     dir = UpdateDirection(Tr);
-     MultABt(FU_tan, dir, flux);
-     return speed;
+      real_t speed = fluxFunction.ComputeFlux(state, Tr, FU_tan);
+      dir = UpdateDirection(Tr);
+      MultABt(FU_tan, dir, flux);
+      return speed;
    }
 
-   real_t ComputeFluxDotN(const Vector &state, const Vector &normal, ElementTransformation &Tr, Vector &fluxDotN) const override
+   real_t ComputeFluxDotN(const Vector &state, const Vector &normal,
+                          ElementTransformation &Tr, Vector &fluxDotN) const override
    {
-     dir = UpdateDirection(Tr);
-     Vector tangent_normal(dim);
-     dir.MultTranspose(normal, tangent_normal);
-     return fluxFunction.ComputeFluxDotN(state, tangent_normal, Tr, fluxDotN);
+      dir = UpdateDirection(Tr);
+      Vector tangent_normal(dim);
+      dir.MultTranspose(normal, tangent_normal);
+      return fluxFunction.ComputeFluxDotN(state, tangent_normal, Tr, fluxDotN);
    }
 
 };
@@ -76,13 +78,22 @@ public:
 
 class ManifoldRiemannSolver : public RiemannSolver
 {
-
-  private:
-    RiemannSolver &rsolver;
-    ManifoldFlux &maniflux;
-
-  public:
-    ManifoldRiemannSolver(
+private:
+   RiemannSolver &rsolver;
+#ifndef MFEM_THREAD_SAFE
+   Vector tangent;
+   Vector n_L, n_R;
+#endif
+public:
+   ManifoldRiemannSolver(const ManifoldFlux &maniflux,
+                         RiemannSolver &rsolver):RiemannSolver(maniflux), rsolver(rsolver)
+   {
+#ifndef MFEM_THREAD_SAFE
+      tangent.SetSize(fluxFunction.sdim);
+      n_L.SetSize(fluxFunction.sdim);
+      n_R.SetSize(fluxFunction.sdim);
+#endif
+   }
 };
 
 
