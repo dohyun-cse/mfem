@@ -65,7 +65,7 @@ public:
       : num_equations(num_equations), dim(dim), sdim(sdim < 0 ? dim : sdim)
    {
 #ifndef MFEM_THREAD_SAFE
-      flux.SetSize(num_equations, sdim);
+      flux.SetSize(num_equations, this->sdim);
 #endif
    }
 
