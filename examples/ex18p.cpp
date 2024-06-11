@@ -215,8 +215,7 @@ int main(int argc, char *argv[])
    EulerFlux flux(dim, specific_heat_ratio);
    RusanovFlux numericalFlux(flux);
    DGHyperbolicConservationLaws euler(
-      vfes, std::unique_ptr<HyperbolicFormIntegrator>(
-         new HyperbolicFormIntegrator(numericalFlux, IntOrderOffset)),
+      vfes, new HyperbolicFormIntegrator(numericalFlux, IntOrderOffset),
       preassembleWeakDiv);
 
    // 7. Visualize momentum with its magnitude

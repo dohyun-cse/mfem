@@ -62,7 +62,7 @@ public:
     */
    DGHyperbolicConservationLaws(
       FiniteElementSpace &vfes_,
-      std::unique_ptr<HyperbolicFormIntegrator> formIntegrator_,
+      HyperbolicFormIntegrator *formIntegrator_,
       bool preassembleWeakDivergence=true);
    /**
     * @brief Apply nonlinear form to obtain M⁻¹(DIVF + JUMP HAT(F))
@@ -85,13 +85,13 @@ public:
 // Implementation of class DGHyperbolicConservationLaws
 DGHyperbolicConservationLaws::DGHyperbolicConservationLaws(
    FiniteElementSpace &vfes_,
-   std::unique_ptr<HyperbolicFormIntegrator> formIntegrator_,
+   HyperbolicFormIntegrator *formIntegrator_,
    bool preassembleWeakDivergence)
    : TimeDependentOperator(vfes_.GetTrueVSize()),
      num_equations(formIntegrator_->num_equations),
      dim(vfes_.GetMesh()->SpaceDimension()),
      vfes(vfes_),
-     formIntegrator(std::move(formIntegrator_)),
+     formIntegrator(formIntegrator_),
      z(vfes_.GetTrueVSize())
 {
    // Standard local assembly and inversion for energy mass matrices.
