@@ -27,77 +27,64 @@
 namespace mfem
 {
 
-class SphericalSWFlux : public FluxFunction
+class ManifoldFlux : public FluxFunction
 {
 private:
-   const real_t g;  // gravity constant
+   FluxFunction &fluxFunction;
    mutable DenseMatrix dir;
    mutable DenseMatrix FU_tan;
    mutable Vector phys_coord;
-   void UpdateDirection(ElementTransformation &Tr) const
-   {
-      Tr.Transform(Tr.GetIntPoint(), phys_coord);
-      phys_coord *= 1.0 / std::sqrt(phys_coord * phys_coord);
 
+   DenseMatrix &UpdateDirection(ElementTransformation &Tr) const
+   {
+      dir=Tr.Jacobian();
       Vector dir1, dir2;
       dir.GetColumnReference(0, dir1);
       dir.GetColumnReference(1, dir2);
-      dir1 = 0.0;
-      dir1[2] = 1.0;
-      dir1.Add(-(dir1*phys_coord), phys_coord);
-      dir1 *= 1.0 / std::sqrt(dir1*dir1);
-
-      dir1.cross3D(phys_coord, dir2);
+      dir1 *= 1.0 / dir1.Norml2();
+      dir2.Add(-(dir1*dir2), dir1);
+      dir2 *= 1.0 / dir2.Norml2();
+      Tr.Transform(Tr.GetIntPoint(), phys_coord);
+      phys_coord *= 1.0 / phys_coord.Norml2();
+      out << dir1*phys_coord << ", " << dir2*phys_coord << std::endl;
+      return dir;
    }
 
 public:
-   /**
-    * @brief Construct a new Shallow Water Flux Function with
-    * given spatial dimension
-    *
-    * @param dim spatial dimension
-    * @param g gravity constant
-    */
-   SphericalSWFlux(const real_t g=9.8)
-      : FluxFunction(1 + 2, 2, 3), g(g), dir(3,2), phys_coord(3), FU_tan(1 + 2, 2) {}
+   ManifoldFlux(FluxFunction &fluxFunction, const int sdim)
+      :FluxFunction(fluxFunction.num_equations, fluxFunction.dim, fluxFunction.sdim),
+       fluxFunction(fluxFunction), dir(sdim, dim), FU_tan(num_equations, dim) {}
 
-   /**
-    * @brief Compute F(h, hu)
-    *
-    * @param state state (h, hu) at current integration point
-    * @param Tr current element transformation with integration point
-    * @param flux F(h, hu) = [huᵀ; huuᵀ + ½gh²I]
-    * @return real_t maximum characteristic speed, |u| + √(gh)
-    */
-   real_t ComputeFlux(const Vector &U, ElementTransformation &Tr,
-                      DenseMatrix &FU) const override
+   real_t ComputeFlux(const Vector &state, ElementTransformation &Tr, DenseMatrix &flux) const override
    {
-      const real_t height = U(0);
-      const Vector h_vel(U.GetData() + 1, dim);
-
-      const real_t energy = 0.5 * g * (height * height);
-
-      MFEM_ASSERT(height >= 0, "Negative Height");
-
-      for (int d = 0; d < dim; d++)
-      {
-         FU_tan(0, d) = h_vel(d);
-         for (int i = 0; i < dim; i++)
-         {
-            FU_tan(1 + i, d) = h_vel(i) * h_vel(d) / height;
-         }
-         FU_tan(1 + d, d) += energy;
-      }
-
-      const real_t sound = std::sqrt(g * height);
-      const real_t vel = std::sqrt(h_vel * h_vel) / height;
-
-      UpdateDirection(Tr);
-      MultABt(FU_tan, dir, FU);
-
-      return vel + sound;
+     real_t speed = fluxFunction.ComputeFlux(state, Tr, FU_tan);
+     dir = UpdateDirection(Tr);
+     MultABt(FU_tan, dir, flux);
+     return speed;
    }
+
+   real_t ComputeFluxDotN(const Vector &state, const Vector &normal, ElementTransformation &Tr, Vector &fluxDotN) const override
+   {
+     dir = UpdateDirection(Tr);
+     Vector tangent_normal(dim);
+     dir.MultTranspose(normal, tangent_normal);
+     return fluxFunction.ComputeFluxDotN(state, tangent_normal, Tr, fluxDotN);
+   }
+
 };
+
+
+class ManifoldRiemannSolver : public RiemannSolver
+{
+
+  private:
+    RiemannSolver &rsolver;
+    ManifoldFlux &maniflux;
+
+  public:
+    ManifoldRiemannSolver(
+};
+
 
 /// @brief Time dependent DG operator for hyperbolic conservation laws
 class DGHyperbolicConservationLaws : public TimeDependentOperator
@@ -349,7 +336,8 @@ VectorFunctionCoefficient SWEInitialCondition(const int problem)
             const real_t h_max = 10.0;
             Vector northPole({0.0, 0.0, 20.0});
             u = 0.0;
-            u(0) = h_min + (h_max - h_min)*std::exp(-x.DistanceSquaredTo(northPole) / (sigma * sigma));
+            u(0) = h_min + (h_max - h_min)*std::exp(-x.DistanceSquaredTo(northPole) /
+                                                    (sigma * sigma));
          });
       default:
          MFEM_ABORT("Problem Undefined");
