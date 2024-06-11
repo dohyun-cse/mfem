@@ -33,22 +33,6 @@ private:
    FluxFunction &fluxFunction;
    mutable DenseMatrix dir;
    mutable DenseMatrix FU_tan;
-   mutable Vector phys_coord;
-
-   DenseMatrix &UpdateDirection(ElementTransformation &Tr) const
-   {
-      dir=Tr.Jacobian();
-      Vector dir1, dir2;
-      dir.GetColumnReference(0, dir1);
-      dir.GetColumnReference(1, dir2);
-      dir1 *= 1.0 / dir1.Norml2();
-      dir2.Add(-(dir1*dir2), dir1);
-      dir2 *= 1.0 / dir2.Norml2();
-      Tr.Transform(Tr.GetIntPoint(), phys_coord);
-      phys_coord *= 1.0 / phys_coord.Norml2();
-      out << dir1*phys_coord << ", " << dir2*phys_coord << std::endl;
-      return dir;
-   }
 
 public:
    ManifoldFlux(FluxFunction &fluxFunction, const int sdim)
@@ -73,6 +57,17 @@ public:
       return fluxFunction.ComputeFluxDotN(state, tangent_normal, Tr, fluxDotN);
    }
 
+   DenseMatrix &UpdateDirection(ElementTransformation &Tr) const
+   {
+      dir=Tr.Jacobian();
+      Vector dir1, dir2;
+      dir.GetColumnReference(0, dir1);
+      dir.GetColumnReference(1, dir2);
+      dir1 *= 1.0 / dir1.Norml2();
+      dir2.Add(-(dir1*dir2), dir1);
+      dir2 *= 1.0 / dir2.Norml2();
+      return dir;
+   }
 };
 
 
