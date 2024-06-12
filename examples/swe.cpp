@@ -215,6 +215,13 @@ int main(int argc, char *argv[])
       vfes, std::unique_ptr<HyperbolicFormIntegrator>(
          new HyperbolicFormIntegrator(numericalFlux, IntOrderOffset)),
       preassembleWeakDiv);
+   Array<int> ess_bdr(0);
+   if (pmesh.bdr_attributes.Size())
+   {
+      ess_bdr.SetSize(pmesh.bdr_attributes.Max());
+      ess_bdr = 1;
+      swe.SetDirichletBC(u0, ess_bdr);
+   }
 
    // 7. Visualize momentum with its magnitude
    socketstream sout;

@@ -45,6 +45,7 @@ private:
    mutable real_t max_char_speed;
    // auxiliary variable used in Mult
    mutable Vector z;
+   VectorCoefficient *dirichlet_cf;
 
    // Compute element-wise inverse mass matrix
    void ComputeInvMass();
@@ -64,6 +65,23 @@ public:
       FiniteElementSpace &vfes_,
       std::unique_ptr<HyperbolicFormIntegrator> formIntegrator_,
       bool preassembleWeakDivergence=true);
+   void SetTime(real_t t_) override
+   {
+      TimeDependentOperator::SetTime(t_);
+      if (dirichlet_cf)
+      {
+         dirichlet_cf->SetTime(t_);
+      }
+   }
+   void SetDirichletBC(VectorCoefficient &cf, Array<int> &ess_bdr)
+   {
+      dirichlet_cf = &cf;
+      formIntegrator->SetDirichletBC(cf, ess_bdr);
+      if (formIntegrator.get())
+      {
+         nonlinearForm->AddBdrFaceIntegrator(formIntegrator.get(), ess_bdr);
+      }
+   }
    /**
     * @brief Apply nonlinear form to obtain M⁻¹(DIVF + JUMP HAT(F))
     *
@@ -259,6 +277,10 @@ Mesh SWEMesh(const int problem)
          });
          return mesh;
       }
+      case 2:
+      {
+          return Mesh::MakeCartesian1D(4, 2000.0);
+      }
       default:
          MFEM_ABORT("Problem Undefined");
    }
@@ -269,7 +291,7 @@ VectorFunctionCoefficient SWEInitialCondition(const int problem)
 {
    switch (problem)
    {
-      case 1: // fast moving vortex
+      case 1: // circular dam break
          return VectorFunctionCoefficient(3, [](const Vector &x, Vector &u)
          {
             const real_t sigma = 5;
@@ -277,6 +299,14 @@ VectorFunctionCoefficient SWEInitialCondition(const int problem)
             const real_t h_max = 10.0;
             u = 0.0;
             u(0) = h_min + (h_max - h_min)*std::exp(-(x*x) / (sigma * sigma));
+         });
+      case 2: // 
+         return VectorFunctionCoefficient(2, [](const Vector &x, Vector &u)
+         {
+            const real_t h_L = 10.00;
+            const real_t h_R = 6.0;
+            u = 0.0;
+            u[0] = x[0] < 1000.0 ? h_L : h_R;
          });
       default:
          MFEM_ABORT("Problem Undefined");
