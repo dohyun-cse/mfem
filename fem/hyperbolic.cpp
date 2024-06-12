@@ -59,7 +59,7 @@ void HyperbolicFormIntegrator::AssembleElementVector(const FiniteElement &el,
    const IntegrationRule *ir = IntRule;
    if (!ir)
    {
-      const int order = el.GetOrder()*2 + IntOrderOffset;
+      const int order = el.GetOrder() * 2 + IntOrderOffset;
       ir = &IntRules.Get(Tr.GetGeometryType(), order);
    }
 
@@ -92,8 +92,17 @@ void HyperbolicFormIntegrator::AssembleFaceVector(
 {
    if (Tr.Elem2No < 0)
    {
-      AssembleBdrFaceVector(el1, Tr, elfun, elvect);
-      return;
+      if (ess_bdr[Tr.Attribute])
+      {
+         AssembleBdrFaceVector(el1, Tr, elfun, elvect);
+         return;
+      }
+      else
+      {
+         elvect.SetSize(el1.GetDof());
+         elvect = 0.0;
+         return;
+      }
    }
    // current elements' the number of degrees of freedom
    // does not consider the number of equations
@@ -136,7 +145,8 @@ void HyperbolicFormIntegrator::AssembleFaceVector(
    const IntegrationRule *ir = IntRule;
    if (!ir)
    {
-      const int order = 2*std::max(el1.GetOrder(), el2.GetOrder()) + IntOrderOffset;
+      const int order =
+         2 * std::max(el1.GetOrder(), el2.GetOrder()) + IntOrderOffset;
       ir = &IntRules.Get(Tr.GetGeometryType(), order);
    }
    // loop over integration points
@@ -155,7 +165,7 @@ void HyperbolicFormIntegrator::AssembleFaceVector(
       elfun2_mat.MultTranspose(shape2, state2);
 
       // Get the normal vector and the flux on the face
-      if (nor.Size() == 1)  // if 1D, use 1 or -1.
+      if (nor.Size() == 1) // if 1D, use 1 or -1.
       {
          // This assume the 1D integration point is in (0,1). This may not work
          // if this changes.
@@ -179,8 +189,8 @@ void HyperbolicFormIntegrator::AssembleFaceVector(
 }
 
 void HyperbolicFormIntegrator::AssembleBdrFaceVector(
-   const FiniteElement &el1,
-   FaceElementTransformations &Tr, const Vector &elfun, Vector &elvect)
+   const FiniteElement &el1, FaceElementTransformations &Tr,
+   const Vector &elfun, Vector &elvect)
 {
    // current elements' the number of degrees of freedom
    // does not consider the number of equations
@@ -203,9 +213,8 @@ void HyperbolicFormIntegrator::AssembleBdrFaceVector(
    shape1.SetSize(dof1);
 #endif
 
-   elvect.SetSize((dof1) * num_equations);
+   elvect.SetSize((dof1)*num_equations);
    elvect = 0.0;
-   if (!ess_bdr[Tr.Attribute]) {return;}
 
    const DenseMatrix elfun1_mat(elfun.GetData(), dof1, num_equations);
 
@@ -216,7 +225,7 @@ void HyperbolicFormIntegrator::AssembleBdrFaceVector(
    const IntegrationRule *ir = IntRule;
    if (!ir)
    {
-      const int order = 2*el1.GetOrder() + IntOrderOffset;
+      const int order = 2 * el1.GetOrder() + IntOrderOffset;
       ir = &IntRules.Get(Tr.GetGeometryType(), order);
    }
    // loop over integration points
@@ -234,7 +243,7 @@ void HyperbolicFormIntegrator::AssembleBdrFaceVector(
       dirichlet_cf->Eval(state2, Tr, ip);
 
       // Get the normal vector and the flux on the face
-      if (nor.Size() == 1)  // if 1D, use 1 or -1.
+      if (nor.Size() == 1) // if 1D, use 1 or -1.
       {
          // This assume the 1D integration point is in (0,1). This may not work
          // if this changes.
@@ -256,13 +265,10 @@ void HyperbolicFormIntegrator::AssembleBdrFaceVector(
    }
 }
 
-HyperbolicFormIntegrator::HyperbolicFormIntegrator(
-   const RiemannSolver &rsolver,
-   const int IntOrderOffset)
-   : NonlinearFormIntegrator(),
-     rsolver(rsolver),
-     fluxFunction(rsolver.GetFluxFunction()),
-     IntOrderOffset(IntOrderOffset),
+HyperbolicFormIntegrator::HyperbolicFormIntegrator(const RiemannSolver &rsolver,
+                                                   const int IntOrderOffset)
+   : NonlinearFormIntegrator(), rsolver(rsolver),
+     fluxFunction(rsolver.GetFluxFunction()), IntOrderOffset(IntOrderOffset),
      num_equations(fluxFunction.num_equations)
 {
 #ifndef MFEM_THREAD_SAFE
@@ -275,8 +281,7 @@ HyperbolicFormIntegrator::HyperbolicFormIntegrator(
 #endif
 }
 
-real_t FluxFunction::ComputeFluxDotN(const Vector &U,
-                                     const Vector &normal,
+real_t FluxFunction::ComputeFluxDotN(const Vector &U, const Vector &normal,
                                      ElementTransformation &Tr,
                                      Vector &FUdotN) const
 {
@@ -288,7 +293,6 @@ real_t FluxFunction::ComputeFluxDotN(const Vector &U,
    return val;
 }
 
-
 real_t RusanovFlux::Eval(const Vector &state1, const Vector &state2,
                          const Vector &nor, FaceElementTransformations &Tr,
                          Vector &flux) const
@@ -296,24 +300,23 @@ real_t RusanovFlux::Eval(const Vector &state1, const Vector &state2,
 #ifdef MFEM_THREAD_SAFE
    Vector fluxN1(fluxFunction.num_equations), fluxN2(fluxFunction.num_equations);
 #endif
-   const real_t speed1 = fluxFunction.ComputeFluxDotN(state1, nor, *Tr.Elem1,
-                                                      fluxN1);
-   const real_t speed2 = fluxFunction.ComputeFluxDotN(state2, nor, *Tr.Elem2,
-                                                      fluxN2);
+   const real_t speed1 =
+      fluxFunction.ComputeFluxDotN(state1, nor, *Tr.Elem1, fluxN1);
+   const real_t speed2 =
+      fluxFunction.ComputeFluxDotN(state2, nor, *Tr.Elem2, fluxN2);
    // NOTE: nor in general is not a unit normal
    const real_t maxE = std::max(speed1, speed2);
    // here, std::sqrt(nor*nor) is multiplied to match the scale with fluxN
-   const real_t scaledMaxE = maxE*std::sqrt(nor*nor);
-   for (int i=0; i<state1.Size(); i++)
+   const real_t scaledMaxE = maxE * std::sqrt(nor * nor);
+   for (int i = 0; i < state1.Size(); i++)
    {
-      flux[i] = 0.5*(scaledMaxE*(state1[i] - state2[i]) + (fluxN1[i] + fluxN2[i]));
+      flux[i] =
+         0.5 * (scaledMaxE * (state1[i] - state2[i]) + (fluxN1[i] + fluxN2[i]));
    }
    return std::max(speed1, speed2);
 }
 
-
-real_t AdvectionFlux::ComputeFlux(const Vector &U,
-                                  ElementTransformation &Tr,
+real_t AdvectionFlux::ComputeFlux(const Vector &U, ElementTransformation &Tr,
                                   DenseMatrix &FU) const
 {
 #ifdef MFEM_THREAD_SAFE
@@ -324,18 +327,14 @@ real_t AdvectionFlux::ComputeFlux(const Vector &U,
    return bval.Norml2();
 }
 
-
-real_t BurgersFlux::ComputeFlux(const Vector &U,
-                                ElementTransformation &Tr,
+real_t BurgersFlux::ComputeFlux(const Vector &U, ElementTransformation &Tr,
                                 DenseMatrix &FU) const
 {
    FU = U * U * 0.5;
    return std::fabs(U(0));
 }
 
-
-real_t ShallowWaterFlux::ComputeFlux(const Vector &U,
-                                     ElementTransformation &Tr,
+real_t ShallowWaterFlux::ComputeFlux(const Vector &U, ElementTransformation &Tr,
                                      DenseMatrix &FU) const
 {
    const real_t height = U(0);
@@ -361,9 +360,7 @@ real_t ShallowWaterFlux::ComputeFlux(const Vector &U,
    return vel + sound;
 }
 
-
-real_t ShallowWaterFlux::ComputeFluxDotN(const Vector &U,
-                                         const Vector &normal,
+real_t ShallowWaterFlux::ComputeFluxDotN(const Vector &U, const Vector &normal,
                                          ElementTransformation &Tr,
                                          Vector &FUdotN) const
 {
@@ -381,24 +378,22 @@ real_t ShallowWaterFlux::ComputeFluxDotN(const Vector &U,
    }
 
    const real_t sound = std::sqrt(g * height);
-   const real_t vel = std::fabs(normal_vel) / std::sqrt(normal*normal);
+   const real_t vel = std::fabs(normal_vel) / std::sqrt(normal * normal);
 
    return vel + sound;
 }
 
-
-real_t EulerFlux::ComputeFlux(const Vector &U,
-                              ElementTransformation &Tr,
+real_t EulerFlux::ComputeFlux(const Vector &U, ElementTransformation &Tr,
                               DenseMatrix &FU) const
 {
    // 1. Get states
-   const real_t density = U(0);                  // ρ
-   const Vector momentum(U.GetData() + 1, dim);  // ρu
-   const real_t energy = U(1 + dim);             // E, internal energy ρe
-   const real_t kinetic_energy = 0.5 * (momentum*momentum) / density;
+   const real_t density = U(0);                 // ρ
+   const Vector momentum(U.GetData() + 1, dim); // ρu
+   const real_t energy = U(1 + dim);            // E, internal energy ρe
+   const real_t kinetic_energy = 0.5 * (momentum * momentum) / density;
    // pressure, p = (γ-1)*(E - ½ρ|u|^2)
-   const real_t pressure = (specific_heat_ratio - 1.0) *
-                           (energy - kinetic_energy);
+   const real_t pressure =
+      (specific_heat_ratio - 1.0) * (energy - kinetic_energy);
 
    // Check whether the solution is physical only in debug mode
    MFEM_ASSERT(density >= 0, "Negative Density");
@@ -408,7 +403,7 @@ real_t EulerFlux::ComputeFlux(const Vector &U,
    // 2. Compute Flux
    for (int d = 0; d < dim; d++)
    {
-      FU(0, d) = momentum(d);  // ρu
+      FU(0, d) = momentum(d); // ρu
       for (int i = 0; i < dim; i++)
       {
          // ρuuᵀ
@@ -435,20 +430,18 @@ real_t EulerFlux::ComputeFlux(const Vector &U,
    return speed + sound;
 }
 
-
-real_t EulerFlux::ComputeFluxDotN(const Vector &x,
-                                  const Vector &normal,
+real_t EulerFlux::ComputeFluxDotN(const Vector &x, const Vector &normal,
                                   ElementTransformation &Tr,
                                   Vector &FUdotN) const
 {
    // 1. Get states
-   const real_t density = x(0);                  // ρ
-   const Vector momentum(x.GetData() + 1, dim);  // ρu
-   const real_t energy = x(1 + dim);             // E, internal energy ρe
-   const real_t kinetic_energy = 0.5 * (momentum*momentum) / density;
+   const real_t density = x(0);                 // ρ
+   const Vector momentum(x.GetData() + 1, dim); // ρu
+   const real_t energy = x(1 + dim);            // E, internal energy ρe
+   const real_t kinetic_energy = 0.5 * (momentum * momentum) / density;
    // pressure, p = (γ-1)*(E - ½ρ|u|^2)
-   const real_t pressure = (specific_heat_ratio - 1.0) *
-                           (energy - kinetic_energy);
+   const real_t pressure =
+      (specific_heat_ratio - 1.0) * (energy - kinetic_energy);
 
    // Check whether the solution is physical only in debug mode
    MFEM_ASSERT(density >= 0, "Negative Density");
@@ -457,7 +450,7 @@ real_t EulerFlux::ComputeFluxDotN(const Vector &x,
 
    // 2. Compute normal flux
 
-   FUdotN(0) = momentum * normal;  // ρu⋅n
+   FUdotN(0) = momentum * normal; // ρu⋅n
    // u⋅n
    const real_t normal_velocity = FUdotN(0) / density;
    for (int d = 0; d < dim; d++)
@@ -473,7 +466,7 @@ real_t EulerFlux::ComputeFluxDotN(const Vector &x,
    // sound speed, √(γ p / ρ)
    const real_t sound = std::sqrt(specific_heat_ratio * pressure / density);
    // fluid speed |u|
-   const real_t speed = std::fabs(normal_velocity) / std::sqrt(normal*normal);
+   const real_t speed = std::fabs(normal_velocity) / std::sqrt(normal * normal);
    // max characteristic speed = fluid speed + sound speed
    return speed + sound;
 }

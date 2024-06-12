@@ -210,9 +210,9 @@ public:
    {
       return max_char_speed;
    }
-   void SetDirichletBC(VectorCoefficient &g, Array<int> ess_bdr_)
+   void SetDirichletBC(VectorCoefficient &g)
    {
-      dirichlet_cf = &g; ess_bdr = ess_bdr_;
+      dirichlet_cf = &g;
    }
 
    const FluxFunction &GetFluxFunction() { return fluxFunction; }
