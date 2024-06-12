@@ -61,7 +61,7 @@ void SnapToSphere(Mesh &mesh, real_t r)
 
 Mesh* MakeSphereMesh(int elem_type, real_t r)
 {
-     // 2. Generate an initial high-order (surface) mesh on the unit sphere. The
+   // 2. Generate an initial high-order (surface) mesh on the unit sphere. The
    //    Mesh object represents a 2D mesh in 3 spatial dimensions. We first add
    //    the elements and the vertices of the mesh, and then make it high-order
    //    by specifying a finite element space for its nodes.
@@ -173,7 +173,7 @@ public:
 #endif
    bool isSymmetric() { return symmetric; }
    void SetIterativeMode(bool flag = true) { iterative_mode = flag; };
-   void SetMaxIt(int max_it){maxit = max_it;}
+   void SetMaxIt(int max_it) {maxit = max_it;}
 
 protected:
    /// @brief Get true dofs related to the boundaries in @ess_bdr
@@ -317,7 +317,7 @@ private:
    const int dim;
    FiniteElementSpace &vfes; // vector finite element space
    // Element integration form. Should contain ComputeFlux
-   const std::unique_ptr<HyperbolicFormIntegrator> &formIntegrator;
+   std::unique_ptr<HyperbolicFormIntegrator> formIntegrator;
    // Base Nonlinear Form
    std::unique_ptr<NonlinearForm> nonlinearForm;
    // element-wise inverse mass matrix
@@ -327,6 +327,8 @@ private:
    mutable real_t max_char_speed;
    // auxiliary variable used in Mult
    mutable Vector z;
+   VectorCoefficient *dirichlet_cf;
+
    GridFunction &sigma;
    std::unique_ptr<ScalarInverseCoefficient> sigmaMCoeff;
    std::unique_ptr<ScalarInverseCoefficient> sigmaDCoeff;
@@ -352,8 +354,26 @@ public:
    IGRDGHyperbolicConservationLaws(
       FiniteElementSpace &vfes_,
       real_t alpha, GridFunction &rho, GridFunction &mom, GridFunction &sigma,
-      const std::unique_ptr<HyperbolicFormIntegrator> &formIntegrator_,
+      HyperbolicFormIntegrator *formIntegrator_,
       bool preassembleWeakDivergence = true);
+   void SetTime(real_t t_) override
+   {
+      TimeDependentOperator::SetTime(t_);
+      if (dirichlet_cf)
+      {
+         dirichlet_cf->SetTime(t_);
+      }
+   }
+   void SetDirichletBC(VectorCoefficient &cf, Array<int> &ess_bdr)
+   {
+      dirichlet_cf = &cf;
+      formIntegrator->SetDirichletBC(cf, ess_bdr);
+      if (formIntegrator.get())
+      {
+         nonlinearForm->AddBdrFaceIntegrator(formIntegrator.get(), ess_bdr);
+      }
+   }
+
    /**
     * @brief Apply nonlinear form to obtain M⁻¹(DIVF + JUMP HAT(F))
     *
@@ -379,13 +399,13 @@ public:
 IGRDGHyperbolicConservationLaws::IGRDGHyperbolicConservationLaws(
    FiniteElementSpace &vfes_,
    real_t alpha, GridFunction &rho, GridFunction &mom, GridFunction &sigma,
-   const std::unique_ptr<HyperbolicFormIntegrator> &formIntegrator_,
+   HyperbolicFormIntegrator *formIntegrator_,
    bool preassembleWeakDivergence)
    : TimeDependentOperator(vfes_.GetTrueVSize()),
      num_equations(formIntegrator_->num_equations),
-     dim(vfes_.GetMesh()->SpaceDimension()), vfes(vfes_),
-     sigma(sigma),
-     formIntegrator(std::move(formIntegrator_)), z(vfes_.GetTrueVSize())
+     dim(vfes_.GetMesh()->Dimension()), vfes(vfes_),
+     formIntegrator(formIntegrator_), z(vfes_.GetTrueVSize()),
+     sigma(sigma), dirichlet_cf(nullptr)
 {
    // Standard local assembly and inversion for energy mass matrices.
    ComputeInvMass();
@@ -438,6 +458,23 @@ IGRDGHyperbolicConservationLaws::IGRDGHyperbolicConservationLaws(
    sigmaLHS->AddDomainIntegrator(new DiffusionIntegrator(*sigmaDCoeff));
    sigmaRHS->AddDomainIntegrator(new DomainLFIntegrator(*sigmaFCoeff));
    Array<int> ess_bdr(0);
+   if (pfes_sig)
+   {
+      if (pfes_sig->GetParMesh()->bdr_attributes.Size())
+      {
+         ess_bdr.SetSize(pfes_sig->GetParMesh()->bdr_attributes.Max());
+         ess_bdr = 0;
+      }
+   }
+   else
+   {
+      if (fes_sig.GetMesh()->bdr_attributes.Size())
+      {
+         ess_bdr.SetSize(fes_sig.GetMesh()->bdr_attributes.Max());
+         ess_bdr = 0;
+      }
+   }
+
    sigmaSolver.reset(new EllipticSolver(*sigmaLHS, *sigmaRHS, ess_bdr));
    sigmaSolver->SetIterativeMode(true);
    // sigmaSolver->SetMaxIt(10);
@@ -573,7 +610,7 @@ void IGRDGHyperbolicConservationLaws::Update()
    }
 }
 
-inline Mesh SWEMesh(const int problem)
+Mesh SWEMesh(const int problem)
 {
    switch (problem)
    {
@@ -582,36 +619,49 @@ inline Mesh SWEMesh(const int problem)
          Mesh mesh("../data/periodic-square.mesh");
          mesh.Transform([](const Vector &x, Vector &y)
          {
-            y = x;
-            y *= 20.0;
+            y = x; y *= 20;
          });
-         // Mesh mesh = mfem::Mesh::MakeCartesian2D(4, 4, Element::QUADRILATERAL,
-         // true, 40.0, 40.0); mesh.Transform([](const Vector &x, Vector &y){y = x; y
-         // -= 20.0; }); Vector x_translation({40.0, 0.0}); Vector
-         // y_translation({0.0, 40.0}); std::vector<Vector> translations =
-         // {x_translation, y_translation}; Mesh periodic_mesh =
-         // Mesh::MakePeriodic(mesh, mesh.CreatePeriodicVertexMapping(translations));
          return mesh;
-      } break;
+      }
+      case 2:
+      {
+         //  Mesh mesh("../data/periodic-segment.mesh");
+         //  mesh.Transform([](const Vector &x, Vector &y)
+         //  {
+         //     y = x; y *= 2000.0;
+         //     out << y[0] << std::endl;
+         //  });
+         //  return mesh;
+
+         return Mesh::MakeCartesian1D(4, 2000.0);
+      }
       default:
          MFEM_ABORT("Problem Undefined");
    }
 }
 
 // Initial condition
-inline VectorFunctionCoefficient SWEInitialCondition(const int problem)
+VectorFunctionCoefficient SWEInitialCondition(const int problem)
 {
    switch (problem)
    {
-      case 1: // fast moving vortex
-         return VectorFunctionCoefficient(3, [](const Vector &x, Vector &sol)
+      case 1: // circular dam break
+         return VectorFunctionCoefficient(3, [](const Vector &x, real_t t, Vector &u)
          {
-            const real_t h_min = 6.0;
-            const real_t h_add = 4.0;
-            const real_t sigma = 3.0;
-
-            sol = 0.0;
-            sol(0) = h_min + h_add * std::exp(-0.5 * ((x * x) / sigma / sigma));
+            const real_t sigma = 5;
+            const real_t h_min = 6.00;
+            const real_t h_max = 10.0;
+            u = 0.0;
+            u(0) = h_min + (h_max - h_min)*std::exp(-(x*x) / (sigma * sigma));
+         });
+      case 2: //
+         return VectorFunctionCoefficient(2, [](const Vector &x, real_t t, Vector &u)
+         {
+            const real_t h_L = 10.0;
+            const real_t h_R = 5.0;
+            u = 0.0;
+            u[0] = x[0] < 1000.0 ? h_L : h_R;
+            out << x[0] << ", " << u[0] << std::endl;
          });
       default:
          MFEM_ABORT("Problem Undefined");
@@ -670,8 +720,11 @@ void EllipticSolver::GetEssentialTrueDofs()
       auto pfes = dynamic_cast<ParFiniteElementSpace *>(a.FESpace());
       if (ess_bdr.NumRows() == 1)
       {
+         if (ess_bdr.NumCols())
+             {
          Array<int> ess_bdr_list(ess_bdr.GetRow(0), ess_bdr.NumCols());
          pfes->GetEssentialTrueDofs(ess_bdr_list, ess_tdof_list);
+             }
       }
       else
       {

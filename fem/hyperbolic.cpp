@@ -301,9 +301,9 @@ real_t RusanovFlux::Eval(const Vector &state1, const Vector &state2,
    Vector fluxN1(fluxFunction.num_equations), fluxN2(fluxFunction.num_equations);
 #endif
    const real_t speed1 =
-      fluxFunction.ComputeFluxDotN(state1, nor, *Tr.Elem1, fluxN1);
+      fluxFunction.ComputeFluxDotN(state1, nor, *(Tr.Elem1), fluxN1);
    const real_t speed2 =
-      fluxFunction.ComputeFluxDotN(state2, nor, *Tr.Elem2, fluxN2);
+      fluxFunction.ComputeFluxDotN(state2, nor, Tr.Elem2No >= 0 ? *(Tr.Elem2) : *(Tr.Elem1), fluxN2);
    // NOTE: nor in general is not a unit normal
    const real_t maxE = std::max(speed1, speed2);
    // here, std::sqrt(nor*nor) is multiplied to match the scale with fluxN

@@ -63,7 +63,7 @@ public:
     */
    DGHyperbolicConservationLaws(
       FiniteElementSpace &vfes_,
-      std::unique_ptr<HyperbolicFormIntegrator> formIntegrator_,
+      HyperbolicFormIntegrator *formIntegrator_,
       bool preassembleWeakDivergence=true);
    void SetTime(real_t t_) override
    {
@@ -103,14 +103,15 @@ public:
 // Implementation of class DGHyperbolicConservationLaws
 DGHyperbolicConservationLaws::DGHyperbolicConservationLaws(
    FiniteElementSpace &vfes_,
-   std::unique_ptr<HyperbolicFormIntegrator> formIntegrator_,
+   HyperbolicFormIntegrator *formIntegrator_,
    bool preassembleWeakDivergence)
    : TimeDependentOperator(vfes_.GetTrueVSize()),
      num_equations(formIntegrator_->num_equations),
      dim(vfes_.GetMesh()->SpaceDimension()),
      vfes(vfes_),
-     formIntegrator(std::move(formIntegrator_)),
-     z(vfes_.GetTrueVSize())
+     formIntegrator(formIntegrator_),
+     z(vfes_.GetTrueVSize()),
+     dirichlet_cf(nullptr)
 {
    // Standard local assembly and inversion for energy mass matrices.
    ComputeInvMass();

@@ -66,15 +66,15 @@ int main(int argc, char *argv[])
    real_t alpha0 = 0.01;
 
    // 1. Parse command-line options.
-   int problem = 1;
+   int problem = 2;
 
    string mesh_file = "";
    int IntOrderOffset = 1;
-   int ser_ref_levels = 0;
-   int par_ref_levels = 1;
-   int order = 3;
+   int ser_ref_levels = 2;
+   int par_ref_levels = 4;
+   int order = 2;
    int ode_solver_type = 4;
-   real_t t_final = 5.0;
+   real_t t_final = 60.0;
    real_t dt = -0.01;
    real_t cfl = 0.3;
    bool visualization = true;
@@ -90,6 +90,8 @@ int main(int argc, char *argv[])
                   " mesh will be used.");
    args.AddOption(&problem, "-p", "--problem",
                   "Problem setup to use. See SWEInitialCondition().");
+   args.AddOption(&alpha0, "-a", "--alpha0",
+                  "Alpha0\n");
    args.AddOption(&ser_ref_levels, "-rs", "--serial-refine",
                   "Number of times to refine the serial mesh uniformly.");
    args.AddOption(&par_ref_levels, "-rp", "--parallel-refine",
@@ -187,6 +189,7 @@ int main(int argc, char *argv[])
    // Initialize the state.
    VectorFunctionCoefficient u0 = SWEInitialCondition(problem);
    ParGridFunction sol(&vfes);
+   u0.SetTime(0.0);
    sol.ProjectCoefficient(u0);
    ParGridFunction sigma(&fes_sig);
    sigma = 0.0;
@@ -218,9 +221,14 @@ int main(int argc, char *argv[])
    IGRFluxFunction flux(swe_flux, sigma);
    real_t alpha = alpha0;
    RusanovFlux numericalFlux(flux);
-   std::unique_ptr<HyperbolicFormIntegrator> sweIntegrator(
-      new HyperbolicFormIntegrator(numericalFlux, IntOrderOffset));
-   IGRDGHyperbolicConservationLaws swe(vfes, alpha, height, mom, sigma, sweIntegrator, preassembleWeakDiv);
+   IGRDGHyperbolicConservationLaws swe(vfes, alpha, height, mom, sigma, new HyperbolicFormIntegrator(numericalFlux, IntOrderOffset), preassembleWeakDiv);
+   Array<int> ess_bdr(0);
+   if (pmesh.bdr_attributes.Size())
+   {
+      ess_bdr.SetSize(pmesh.bdr_attributes.Max());
+      ess_bdr = 1;
+      swe.SetDirichletBC(u0, ess_bdr);
+   }
 
    // 7. Visualize momentum with its magnitude
    socketstream sout, sout_sigma;
