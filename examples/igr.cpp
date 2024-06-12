@@ -222,7 +222,18 @@ int main(int argc, char *argv[])
    // 6. Set up the nonlinear form with SWE flux and numerical flux
    ShallowWaterFlux swe_flux(dim);
    IGRFluxFunction flux(swe_flux, sigma);
-   real_t alpha = alpha0;
+   real_t hmin, hmax, kappa_min, kappa_max;
+   pmesh.GetCharacteristics(hmin, hmax, kappa_min, kappa_max);
+   real_t hmin_old(hmin);
+   hmin = infinity();
+      for (int i = 0; i < pmesh.GetNE(); i++)
+      {
+         hmin = min(pmesh.GetElementSize(i, 1), hmin);
+      }
+      MPI_Allreduce(MPI_IN_PLACE, &hmin, 1,  MPITypeMap<real_t>::mpi_type, MPI_MIN,
+                    pmesh.GetComm());
+
+   ConstantCoefficient alpha(alpha0*std::pow(hmin/2000.0,2.0));
    RusanovFlux numericalFlux(flux);
    IGRDGHyperbolicConservationLaws swe(vfes, alpha, height, mom, sigma, new HyperbolicFormIntegrator(numericalFlux, IntOrderOffset), preassembleWeakDiv);
    Array<int> ess_bdr(0);
@@ -285,7 +296,10 @@ int main(int argc, char *argv[])
          MPI_Barrier(pmesh.GetComm());
       }
    }
-   ParaViewDataCollection pvdc("swe", &pmesh);
+
+   ostringstream pv_dirname;
+   pv_dirname << "swe-igr-" << alpha0 << "-" << order << "-" << order_sig;
+   ParaViewDataCollection pvdc(pv_dirname.str(), &pmesh);
    pvdc.SetDataFormat(VTKFormat::BINARY32);
    pvdc.SetHighOrderOutput(true);
    pvdc.SetLevelsOfDetail(order);
@@ -300,15 +314,8 @@ int main(int argc, char *argv[])
 
    // When dt is not specified, use CFL condition.
    // Compute h_min and initial maximum characteristic speed
-   real_t hmin = infinity();
    if (cfl > 0)
    {
-      for (int i = 0; i < pmesh.GetNE(); i++)
-      {
-         hmin = min(pmesh.GetElementSize(i, 1), hmin);
-      }
-      MPI_Allreduce(MPI_IN_PLACE, &hmin, 1,  MPITypeMap<real_t>::mpi_type, MPI_MIN,
-                    pmesh.GetComm());
       // Find a safe dt, using a temporary vector. Calling Mult() computes the
       // maximum char speed at all quadrature points on all faces (and all
       // elements with -mf).

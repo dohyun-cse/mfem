@@ -239,34 +239,10 @@ public:
    }
 };
 
-class ScalarInverseCoefficient : public Coefficient
-{
-public:
-   ScalarInverseCoefficient(Coefficient *c, real_t a = 1.0) : c(c),
-      own_coeff(false), a(a) {}
-   ScalarInverseCoefficient(GridFunction *c,
-                            real_t a = 1.0) : c(new GridFunctionCoefficient(c)), own_coeff(true), a(a) {}
-   /** @brief Evaluate the coefficient in the element described by @a T at the
-       point @a ip. */
-   /** @note When this method is called, the caller must make sure that the
-       IntegrationPoint associated with @a T is the same as @a ip. This can be
-       achieved by calling T.SetIntPoint(&ip). */
-   virtual real_t Eval(ElementTransformation &T, const IntegrationPoint &ip)
-   {
-      return a / c->Eval(T, ip);
-   }
-   ~ScalarInverseCoefficient() { if (own_coeff) delete c; }
-
-private:
-   Coefficient *c;
-   bool own_coeff;
-   real_t a;
-};
-
 class IGRSourceCoeff : public Coefficient
 {
 public:
-   IGRSourceCoeff(real_t alpha, GridFunction &rho, GridFunction &mom)
+   IGRSourceCoeff(Coefficient &alpha, GridFunction &rho, GridFunction &mom)
       : vdim(mom.VectorDim()), alpha(alpha), rho(rho), mom(mom)
    {
 #ifndef MFEM_THREAD_SAFE
@@ -283,8 +259,8 @@ public:
       DenseMatrix Du(vdim);
       Vector Drho(vdim), mom_val(vdim);
 #endif
-      const real_t rho_val = rho.GetValue(T, T.GetIntPoint());
-      mom.GetVectorValue(T, T.GetIntPoint(), mom_val);
+      const real_t rho_val = rho.GetValue(T, ip);
+      mom.GetVectorValue(T, ip, mom_val);
 
       rho.GetGradient(T, Drho);
       mom.GetVectorGradient(T, Du);
@@ -292,16 +268,18 @@ public:
       AddMult_a_VWt(-1.0 / std::pow(rho_val, 2.0), Drho, mom_val, Du);
 
       const real_t divu = Du.Trace();
-      MultAtB(Du, Du, Du2);
-      // Mult(Du, Du, Du2);
+    //   MultAtB(Du, Du, Du2);
+      Mult(Du, Du, Du2);
       const real_t trDu2 = Du2.Trace();
       // NOTE: TEST SOME AD-HOC
-      return alpha * (std::pow(divu, 2.0) + trDu2);
+      real_t divu_neg = std::min(0.0, divu);
+    //   return alpha.Eval(T, ip) * (std::pow(divu, 2.0) + trDu2);
+      return 2*alpha.Eval(T, ip) * (divu*divu_neg);
    }
 
 protected:
    int vdim;
-   real_t alpha;
+   Coefficient &alpha;
    GridFunction &rho, &mom;
 #ifndef MFEM_THREAD_SAFE
    DenseMatrix Du, Du2;
@@ -330,8 +308,9 @@ private:
    VectorCoefficient *dirichlet_cf;
 
    GridFunction &sigma;
-   std::unique_ptr<ScalarInverseCoefficient> sigmaMCoeff;
-   std::unique_ptr<ScalarInverseCoefficient> sigmaDCoeff;
+   GridFunctionCoefficient rho_cf;
+   std::unique_ptr<RatioCoefficient> sigmaMCoeff;
+   std::unique_ptr<RatioCoefficient> sigmaDCoeff;
    std::unique_ptr<IGRSourceCoeff> sigmaFCoeff;
    std::unique_ptr<BilinearForm> sigmaLHS;
    std::unique_ptr<LinearForm> sigmaRHS;
@@ -353,7 +332,7 @@ public:
     */
    IGRDGHyperbolicConservationLaws(
       FiniteElementSpace &vfes_,
-      real_t alpha, GridFunction &rho, GridFunction &mom, GridFunction &sigma,
+      Coefficient &alpha, GridFunction &rho, GridFunction &mom, GridFunction &sigma,
       HyperbolicFormIntegrator *formIntegrator_,
       bool preassembleWeakDivergence = true);
    void SetTime(real_t t_) override
@@ -398,7 +377,7 @@ public:
 // Implementation of class IGRDGHyperbolicConservationLaws
 IGRDGHyperbolicConservationLaws::IGRDGHyperbolicConservationLaws(
    FiniteElementSpace &vfes_,
-   real_t alpha, GridFunction &rho, GridFunction &mom, GridFunction &sigma,
+   Coefficient &alpha, GridFunction &rho, GridFunction &mom, GridFunction &sigma,
    HyperbolicFormIntegrator *formIntegrator_,
    bool preassembleWeakDivergence)
    : TimeDependentOperator(vfes_.GetTrueVSize()),
@@ -451,11 +430,12 @@ IGRDGHyperbolicConservationLaws::IGRDGHyperbolicConservationLaws(
       sigmaRHS.reset(new LinearForm(&fes_sig));
    }
 #endif
-   sigmaMCoeff.reset(new ScalarInverseCoefficient(&rho));
-   sigmaDCoeff.reset(new ScalarInverseCoefficient(&rho, alpha));
+   rho_cf.SetGridFunction(&rho);
+   sigmaMCoeff.reset(new RatioCoefficient(1.0, rho_cf));
+   sigmaDCoeff.reset(new RatioCoefficient(alpha, rho_cf));
    sigmaFCoeff.reset(new IGRSourceCoeff(alpha, rho, mom));
    sigmaLHS->AddDomainIntegrator(new MassIntegrator(*sigmaMCoeff));
-   sigmaLHS->AddDomainIntegrator(new DiffusionIntegrator(*sigmaDCoeff));
+//    sigmaLHS->AddDomainIntegrator(new DiffusionIntegrator(*sigmaDCoeff));
    sigmaRHS->AddDomainIntegrator(new DomainLFIntegrator(*sigmaFCoeff));
    Array<int> ess_bdr(0);
    if (pfes_sig)
@@ -637,6 +617,16 @@ Mesh SWEMesh(const int problem)
           });
           return mesh;
       }
+      case 4:
+      {
+          Mesh mesh = Mesh("../data/periodic-segment.mesh");
+          mesh.Transform([](const Vector &x, Vector &y){
+            y = x;
+            y -= 0.5;
+            y *= 4000.0;
+          });
+          return mesh;
+      }
       default:
          MFEM_ABORT("Problem Undefined");
    }
@@ -671,6 +661,20 @@ VectorFunctionCoefficient SWEInitialCondition(const int problem)
             const real_t h_R = 5.0;
             u = 0.0;
             u[0] = std::fabs(x[0]) < 1000.0 ? h_L : h_R;
+         });
+      case 4: //
+         return VectorFunctionCoefficient(2, [](const Vector &x, real_t t, Vector &u)
+         {
+                    const real_t h_min = 6.0;
+           const real_t h_add = 4.0;
+           const real_t sigma = 3.0;
+
+           const real_t alpha=5e-2;
+           const real_t hl = 10;
+           const real_t hr = 0.5 * hl;
+           const real_t x0 = x[0];
+           u(0) = (hl-hr) * std::exp(-(x0-1000)*alpha)/(1+std::exp(-(x0-1000)*alpha))  * std::exp((x0+1000)*alpha)/(1+std::exp((x0+1000)*alpha)) + hr;
+
          });
       default:
          MFEM_ABORT("Problem Undefined");
