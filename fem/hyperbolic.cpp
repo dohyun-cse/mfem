@@ -92,7 +92,7 @@ void HyperbolicFormIntegrator::AssembleFaceVector(
 {
    if (Tr.Elem2No < 0)
    {
-      if (ess_bdr[Tr.Attribute])
+      if (ess_bdr && ess_bdr->operator[](Tr.Attribute-1))
       {
          AssembleBdrFaceVector(el1, Tr, elfun, elvect);
          return;

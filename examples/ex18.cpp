@@ -66,7 +66,7 @@ int main(int argc, char *argv[])
 
    string mesh_file = "";
    int IntOrderOffset = 1;
-   int ref_levels = 1;
+   int ref_levels = 2;
    int order = 3;
    int ode_solver_type = 4;
    real_t t_final = 2.0;
@@ -161,6 +161,7 @@ int main(int argc, char *argv[])
    VectorFunctionCoefficient u0 = EulerInitialCondition(problem,
                                                         specific_heat_ratio,
                                                         gas_constant);
+   u0.SetTime(0.0);
    GridFunction sol(&vfes);
    sol.ProjectCoefficient(u0);
    GridFunction mom(&dfes, sol.GetData() + fes.GetNDofs());
@@ -186,10 +187,16 @@ int main(int argc, char *argv[])
    // 6. Set up the nonlinear form with euler flux and numerical flux
    EulerFlux flux(dim, specific_heat_ratio);
    RusanovFlux numericalFlux(flux);
-   DGHyperbolicConservationLaws euler(
-      vfes, std::unique_ptr<HyperbolicFormIntegrator>(
-         new HyperbolicFormIntegrator(numericalFlux, IntOrderOffset)),
-      preassembleWeakDiv);
+   DGHyperbolicConservationLaws euler(vfes,
+                                      new HyperbolicFormIntegrator(numericalFlux, IntOrderOffset),
+                                      preassembleWeakDiv);
+   Array<int> ess_bdr(0);
+   if (mesh.bdr_attributes.Size())
+   {
+      ess_bdr.SetSize(mesh.bdr_attributes.Max());
+      ess_bdr = 1;
+      euler.SetDirichletBC(u0, ess_bdr);
+   }
 
    // 7. Visualize momentum with its magnitude
    socketstream sout;

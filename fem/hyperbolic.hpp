@@ -168,7 +168,7 @@ private:
    const FluxFunction &fluxFunction;
    const int IntOrderOffset; // integration order offset, 2*p + IntOrderOffset.
    VectorCoefficient *dirichlet_cf;
-   Array<int> ess_bdr;
+   Array<int> *ess_bdr;
 #ifndef MFEM_THREAD_SAFE
    // Local storage for element integration
    Vector shape;              // shape function value at an integration point
@@ -210,9 +210,11 @@ public:
    {
       return max_char_speed;
    }
-   void SetDirichletBC(VectorCoefficient &g)
+
+   void SetDirichletBC(VectorCoefficient &g, Array<int> &ess_bdr_)
    {
       dirichlet_cf = &g;
+      ess_bdr = &ess_bdr_;
    }
 
    const FluxFunction &GetFluxFunction() { return fluxFunction; }
