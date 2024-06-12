@@ -712,23 +712,26 @@ void EllipticSolver::GetEssentialTrueDofs()
       if (ess_bdr.NumRows() == 1)
       {
          if (ess_bdr.NumCols())
-             {
-         Array<int> ess_bdr_list(ess_bdr.GetRow(0), ess_bdr.NumCols());
-         pfes->GetEssentialTrueDofs(ess_bdr_list, ess_tdof_list);
-             }
+         {
+            Array<int> ess_bdr_list(ess_bdr.GetRow(0), ess_bdr.NumCols());
+            pfes->GetEssentialTrueDofs(ess_bdr_list, ess_tdof_list);
+         }
       }
       else
       {
-         Array<int> ess_tdof_list_comp, ess_bdr_list;
-         ess_bdr_list.MakeRef(ess_bdr.GetRow(0), ess_bdr.NumCols());
-         pfes->GetEssentialTrueDofs(ess_bdr_list, ess_tdof_list_comp, -1);
-         ess_tdof_list.Append(ess_tdof_list_comp);
-
-         for (int i = 1; i < ess_bdr.NumRows(); i++)
+         if (ess_bdr.NumCols())
          {
-            ess_bdr_list.MakeRef(ess_bdr.GetRow(i), ess_bdr.NumCols());
-            pfes->GetEssentialTrueDofs(ess_bdr_list, ess_tdof_list_comp, i - 1);
+            Array<int> ess_tdof_list_comp, ess_bdr_list;
+            ess_bdr_list.MakeRef(ess_bdr.GetRow(0), ess_bdr.NumCols());
+            pfes->GetEssentialTrueDofs(ess_bdr_list, ess_tdof_list_comp, -1);
             ess_tdof_list.Append(ess_tdof_list_comp);
+
+            for (int i = 1; i < ess_bdr.NumRows(); i++)
+            {
+               ess_bdr_list.MakeRef(ess_bdr.GetRow(i), ess_bdr.NumCols());
+               pfes->GetEssentialTrueDofs(ess_bdr_list, ess_tdof_list_comp, i - 1);
+               ess_tdof_list.Append(ess_tdof_list_comp);
+            }
          }
       }
    }
@@ -737,10 +740,43 @@ void EllipticSolver::GetEssentialTrueDofs()
 
       if (ess_bdr.NumRows() == 1)
       {
+         if (ess_bdr.NumCols())
+         {
+            Array<int> ess_bdr_list(ess_bdr.GetRow(0), ess_bdr.NumCols());
+            a.FESpace()->GetEssentialTrueDofs(ess_bdr_list, ess_tdof_list);
+         }
+      }
+      else
+      {
+         if (ess_bdr.NumCols())
+         {
+            Array<int> ess_tdof_list_comp, ess_bdr_list;
+            ess_bdr_list.MakeRef(ess_bdr.GetRow(0), ess_bdr.NumCols());
+            a.FESpace()->GetEssentialTrueDofs(ess_bdr_list, ess_tdof_list_comp, -1);
+            ess_tdof_list.Append(ess_tdof_list_comp);
+
+            for (int i = 1; i < ess_bdr.NumRows(); i++)
+            {
+               ess_bdr_list.MakeRef(ess_bdr.GetRow(i), ess_bdr.NumCols());
+               a.FESpace()->GetEssentialTrueDofs(ess_bdr_list, ess_tdof_list_comp,
+                                                 i - 1);
+               ess_tdof_list.Append(ess_tdof_list_comp);
+            }
+         }
+      }
+   }
+#else
+   if (ess_bdr.NumRows() == 1)
+   {
+      if (ess_bdr.NumCols())
+      {
          Array<int> ess_bdr_list(ess_bdr.GetRow(0), ess_bdr.NumCols());
          a.FESpace()->GetEssentialTrueDofs(ess_bdr_list, ess_tdof_list);
       }
-      else
+   }
+   else
+   {
+      if (ess_bdr.NumCols())
       {
          Array<int> ess_tdof_list_comp, ess_bdr_list;
          ess_bdr_list.MakeRef(ess_bdr.GetRow(0), ess_bdr.NumCols());
@@ -754,27 +790,6 @@ void EllipticSolver::GetEssentialTrueDofs()
                                               i - 1);
             ess_tdof_list.Append(ess_tdof_list_comp);
          }
-      }
-   }
-#else
-   if (ess_bdr.NumRows() == 1)
-   {
-      Array<int> ess_bdr_list(ess_bdr.GetRow(0), ess_bdr.NumCols());
-      a.FESpace()->GetEssentialTrueDofs(ess_bdr_list, ess_tdof_list);
-   }
-   else
-   {
-      Array<int> ess_tdof_list_comp, ess_bdr_list;
-      ess_bdr_list.MakeRef(ess_bdr.GetRow(0), ess_bdr.NumCols());
-      a.FESpace()->GetEssentialTrueDofs(ess_bdr_list, ess_tdof_list_comp, -1);
-      ess_tdof_list.Append(ess_tdof_list_comp);
-
-      for (int i = 1; i < ess_bdr.NumRows(); i++)
-      {
-         ess_bdr_list.MakeRef(ess_bdr.GetRow(i), ess_bdr.NumCols());
-         a.FESpace()->GetEssentialTrueDofs(ess_bdr_list, ess_tdof_list_comp,
-                                           i - 1);
-         ess_tdof_list.Append(ess_tdof_list_comp);
       }
    }
 #endif
