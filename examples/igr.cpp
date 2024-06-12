@@ -63,7 +63,7 @@ int main(int argc, char *argv[])
    const int numProcs = Mpi::WorldSize();
    const int myRank = Mpi::WorldRank();
    Hypre::Init();
-   real_t alpha0 = 0.01;
+   real_t alpha0 = 20.0;
 
    // 1. Parse command-line options.
    int problem = 2;
@@ -73,6 +73,7 @@ int main(int argc, char *argv[])
    int ser_ref_levels = 2;
    int par_ref_levels = 4;
    int order = 2;
+   int order_sig = 2;
    int ode_solver_type = 4;
    real_t t_final = 60.0;
    real_t dt = -0.01;
@@ -98,6 +99,8 @@ int main(int argc, char *argv[])
                   "Number of times to refine the parallel mesh uniformly.");
    args.AddOption(&order, "-o", "--order",
                   "Order (degree) of the finite elements.");
+   args.AddOption(&order_sig, "-os", "--order-sigma",
+                  "Order (degree) of the sigma finite elements.");
    args.AddOption(&ode_solver_type, "-s", "--ode-solver",
                   "ODE solver: 1 - Forward Euler,\n\t"
                   "            2 - RK2 SSP, 3 - RK3 SSP, 4 - RK4, 6 - RK6.");
@@ -164,7 +167,7 @@ int main(int argc, char *argv[])
    // 4. Define the discontinuous DG finite element space of the given
    //    polynomial order on the refined mesh.
    DG_FECollection fec(order, dim);
-   H1_FECollection h1_fec(1, dim);
+   H1_FECollection h1_fec(order_sig, dim);
    // Finite element space for a scalar (thermodynamic quantity)
    ParFiniteElementSpace fes(&pmesh, &fec);
    ParFiniteElementSpace fes_sig(&pmesh, &h1_fec);
@@ -282,16 +285,16 @@ int main(int argc, char *argv[])
          MPI_Barrier(pmesh.GetComm());
       }
    }
-   // ParaViewDataCollection pvdc("swe", &pmesh);
-   // pvdc.SetDataFormat(VTKFormat::BINARY32);
-   // pvdc.SetHighOrderOutput(true);
-   // pvdc.SetLevelsOfDetail(order);
-   // pvdc.SetCycle(0);
-   // pvdc.SetTime(0.0);
-   // pvdc.RegisterField("momentum", &mom);
-   // pvdc.RegisterField("height", &height);
-   // pvdc.RegisterField("sigma", &sigma);
-   // pvdc.Save();
+   ParaViewDataCollection pvdc("swe", &pmesh);
+   pvdc.SetDataFormat(VTKFormat::BINARY32);
+   pvdc.SetHighOrderOutput(true);
+   pvdc.SetLevelsOfDetail(order);
+   pvdc.SetCycle(0);
+   pvdc.SetTime(0.0);
+   pvdc.RegisterField("momentum", &mom);
+   pvdc.RegisterField("height", &height);
+   pvdc.RegisterField("sigma", &sigma);
+   pvdc.Save();
 
    // 8. Time integration
 
@@ -362,9 +365,9 @@ int main(int argc, char *argv[])
             sout_sigma << "solution\n" << pmesh << sigma << flush;
          }
       }
-         // pvdc.SetCycle(ti);
-         // pvdc.SetTime(t);
-         // pvdc.Save();
+         pvdc.SetCycle(ti);
+         pvdc.SetTime(t);
+         pvdc.Save();
    }
 
    tic_toc.Stop();

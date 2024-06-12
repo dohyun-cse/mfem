@@ -627,6 +627,16 @@ Mesh SWEMesh(const int problem)
       {
          return Mesh::MakeCartesian1D(4, 2000.0);
       }
+      case 3:
+      {
+          Mesh mesh = Mesh("../data/periodic-segment.mesh");
+          mesh.Transform([](const Vector &x, Vector &y){
+            y = x;
+            y -= 0.5;
+            y *= 4000.0;
+          });
+          return mesh;
+      }
       default:
          MFEM_ABORT("Problem Undefined");
    }
@@ -653,6 +663,14 @@ VectorFunctionCoefficient SWEInitialCondition(const int problem)
             const real_t h_R = 5.0;
             u = 0.0;
             u[0] = x[0] < 1000.0 ? h_L : h_R;
+         });
+      case 3: //
+         return VectorFunctionCoefficient(2, [](const Vector &x, real_t t, Vector &u)
+         {
+            const real_t h_L = 10.0;
+            const real_t h_R = 5.0;
+            u = 0.0;
+            u[0] = std::fabs(x[0]) < 1000.0 ? h_L : h_R;
          });
       default:
          MFEM_ABORT("Problem Undefined");
@@ -839,7 +857,7 @@ bool EllipticSolver::Solve(GridFunction &x, bool A_assembled,
    }
    else
    {
-      M.reset(new GSSmoother(static_cast<SparseMatrix &>(*A)));
+      M.reset(new HypreBoomerAMG(static_cast<HypreParMatrix &>(*A)));
       cg.reset(new CGSolver);
    }
 #else
