@@ -272,9 +272,9 @@ public:
       Mult(Du, Du, Du2);
       const real_t trDu2 = Du2.Trace();
       // NOTE: TEST SOME AD-HOC
-      real_t divu_neg = std::min(0.0, divu);
-    //   return alpha.Eval(T, ip) * (std::pow(divu, 2.0) + trDu2);
-      return 2*alpha.Eval(T, ip) * (divu*divu_neg);
+      return alpha.Eval(T, ip) * (std::pow(divu, 2.0) + trDu2);
+    //   real_t divu_neg = std::min(0.0, divu);
+    //   return 2*alpha.Eval(T, ip) * (divu*divu_neg);
    }
 
 protected:
