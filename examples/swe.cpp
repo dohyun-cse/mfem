@@ -185,6 +185,7 @@ int main(int argc, char *argv[])
    // Initialize the state.
    VectorFunctionCoefficient u0 = SWEInitialCondition(problem);
    ParGridFunction sol(&vfes);
+   u0.SetTime(0.0);
    sol.ProjectCoefficient(u0);
    ParGridFunction mom(&dfes, sol.GetData() + fes.GetNDofs());
    ParGridFunction height(&fes, sol.GetData());
@@ -212,9 +213,7 @@ int main(int argc, char *argv[])
    ShallowWaterFlux flux(dim, 9.8);
    RusanovFlux numericalFlux(flux);
    DGHyperbolicConservationLaws swe(
-      vfes, std::unique_ptr<HyperbolicFormIntegrator>(
-         new HyperbolicFormIntegrator(numericalFlux, IntOrderOffset)),
-      preassembleWeakDiv);
+      vfes, new HyperbolicFormIntegrator(numericalFlux, IntOrderOffset), preassembleWeakDiv);
    Array<int> ess_bdr(0);
    if (pmesh.bdr_attributes.Size())
    {
