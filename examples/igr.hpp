@@ -267,7 +267,7 @@ class IGRSourceCoeff : public Coefficient
 {
 public:
    IGRSourceCoeff(real_t alpha, GridFunction &rho, GridFunction &mom)
-      : alpha(alpha), rho(rho), mom(mom), vdim(mom.VectorDim())
+      : vdim(mom.VectorDim()), alpha(alpha), rho(rho), mom(mom)
    {
 #ifndef MFEM_THREAD_SAFE
       Drho.SetSize(vdim);
@@ -405,7 +405,7 @@ IGRDGHyperbolicConservationLaws::IGRDGHyperbolicConservationLaws(
      num_equations(formIntegrator_->num_equations),
      dim(vfes_.GetMesh()->Dimension()), vfes(vfes_),
      formIntegrator(formIntegrator_), z(vfes_.GetTrueVSize()),
-     sigma(sigma), dirichlet_cf(nullptr)
+     dirichlet_cf(nullptr), sigma(sigma)
 {
    // Standard local assembly and inversion for energy mass matrices.
    ComputeInvMass();
@@ -625,14 +625,6 @@ Mesh SWEMesh(const int problem)
       }
       case 2:
       {
-         //  Mesh mesh("../data/periodic-segment.mesh");
-         //  mesh.Transform([](const Vector &x, Vector &y)
-         //  {
-         //     y = x; y *= 2000.0;
-         //     out << y[0] << std::endl;
-         //  });
-         //  return mesh;
-
          return Mesh::MakeCartesian1D(4, 2000.0);
       }
       default:
@@ -661,7 +653,6 @@ VectorFunctionCoefficient SWEInitialCondition(const int problem)
             const real_t h_R = 5.0;
             u = 0.0;
             u[0] = x[0] < 1000.0 ? h_L : h_R;
-            out << x[0] << ", " << u[0] << std::endl;
          });
       default:
          MFEM_ABORT("Problem Undefined");
