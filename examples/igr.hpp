@@ -435,7 +435,7 @@ IGRDGHyperbolicConservationLaws::IGRDGHyperbolicConservationLaws(
    sigmaDCoeff.reset(new RatioCoefficient(alpha, rho_cf));
    sigmaFCoeff.reset(new IGRSourceCoeff(alpha, rho, mom));
    sigmaLHS->AddDomainIntegrator(new MassIntegrator(*sigmaMCoeff));
-//    sigmaLHS->AddDomainIntegrator(new DiffusionIntegrator(*sigmaDCoeff));
+   sigmaLHS->AddDomainIntegrator(new DiffusionIntegrator(*sigmaDCoeff));
    sigmaRHS->AddDomainIntegrator(new DomainLFIntegrator(*sigmaFCoeff));
    Array<int> ess_bdr(0);
    if (pfes_sig)
@@ -649,10 +649,12 @@ VectorFunctionCoefficient SWEInitialCondition(const int problem)
       case 2: //
          return VectorFunctionCoefficient(2, [](const Vector &x, real_t t, Vector &u)
          {
-            const real_t h_L = 10.0;
-            const real_t h_R = 5.0;
+            const real_t alpha = 5e-02;
+            const real_t hl = 10.0;
+            const real_t hr = 5.0;
+            const real_t x0 = x[0];
             u = 0.0;
-            u[0] = x[0] < 1000.0 ? h_L : h_R;
+            u(0) = (hl-hr) * std::exp(-(x0-1000)*alpha)/(1+std::exp(-(x0-1000)*alpha)) + hr;
          });
       case 3: //
          return VectorFunctionCoefficient(2, [](const Vector &x, real_t t, Vector &u)
