@@ -31,19 +31,18 @@ class ManifoldFlux : public FluxFunction
 {
 private:
    FluxFunction &fluxFunction;
-   mutable DenseMatrix dir;
    mutable DenseMatrix FU_tan;
 
 public:
    ManifoldFlux(FluxFunction &fluxFunction, const int sdim)
       :FluxFunction(fluxFunction.num_equations, fluxFunction.dim, fluxFunction.sdim),
-       fluxFunction(fluxFunction), dir(sdim, dim), FU_tan(num_equations, dim) {}
+       fluxFunction(fluxFunction), FU_tan(num_equations, dim) {}
 
    real_t ComputeFlux(const Vector &state, ElementTransformation &Tr,
                       DenseMatrix &flux) const override
    {
       real_t speed = fluxFunction.ComputeFlux(state, Tr, FU_tan);
-      dir = UpdateDirection(Tr);
+      const DenseMatrix &dir = Tr.Jacobian();
       MultABt(FU_tan, dir, flux);
       return speed;
    }
@@ -51,23 +50,23 @@ public:
    real_t ComputeFluxDotN(const Vector &state, const Vector &normal,
                           ElementTransformation &Tr, Vector &fluxDotN) const override
    {
-      dir = UpdateDirection(Tr);
+      const DenseMatrix &dir = Tr.Jacobian();
       Vector tangent_normal(dim);
       dir.MultTranspose(normal, tangent_normal);
       return fluxFunction.ComputeFluxDotN(state, tangent_normal, Tr, fluxDotN);
    }
 
-   DenseMatrix &UpdateDirection(ElementTransformation &Tr) const
-   {
-      dir=Tr.Jacobian();
-      Vector dir1, dir2;
-      dir.GetColumnReference(0, dir1);
-      dir.GetColumnReference(1, dir2);
-      dir1 *= 1.0 / dir1.Norml2();
-      dir2.Add(-(dir1*dir2), dir1);
-      dir2 *= 1.0 / dir2.Norml2();
-      return dir;
-   }
+//    DenseMatrix &UpdateDirection(ElementTransformation &Tr) const
+//    {
+//       dir=Tr.Jacobian();
+//       Vector dir1, dir2;
+//       dir.GetColumnReference(0, dir1);
+//       dir.GetColumnReference(1, dir2);
+//       dir1 *= 1.0 / dir1.Norml2();
+//       dir2.Add(-(dir1*dir2), dir1);
+//       dir2 *= 1.0 / dir2.Norml2();
+//       return dir;
+//    }
 };
 
 
