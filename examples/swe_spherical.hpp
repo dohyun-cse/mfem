@@ -32,41 +32,70 @@ class ManifoldFlux : public FluxFunction
 private:
    FluxFunction &fluxFunction;
    mutable DenseMatrix FU_tan;
+   mutable DenseMatrix jacob2ortho;
+   mutable DenseMatrix ortho2jacob;
+   mutable Vector state_tan;
+   const int offset;
 
 public:
-   ManifoldFlux(FluxFunction &fluxFunction, const int sdim)
+   ManifoldFlux(FluxFunction &fluxFunction, const int sdim, const int offset)
       :FluxFunction(fluxFunction.num_equations, fluxFunction.dim, fluxFunction.sdim),
-       fluxFunction(fluxFunction), FU_tan(num_equations, dim) {}
+       fluxFunction(fluxFunction), FU_tan(num_equations, dim), offset(offset),
+       jacob2ortho(dim)
+   {
+      MFEM_ASSERT(sdim == 2 &&
+                  dim == 3, "Currently, it only supports 2D surface in 3D");
+   }
+
+   FluxFunction &GetFluxFunction() {return fluxFunction;}
 
    real_t ComputeFlux(const Vector &state, ElementTransformation &Tr,
                       DenseMatrix &flux) const override
    {
-      real_t speed = fluxFunction.ComputeFlux(state, Tr, FU_tan);
-      const DenseMatrix &dir = Tr.Jacobian();
-      MultABt(FU_tan, dir, flux);
+      // Update coordinate
+      Jacobian2OrthoCoord(Tr);
+      // state in orthogonal coordinate
+      state_tan = state;
+      Vector vec_Ortho, vec_Jacob;
+      vec_Ortho.SetDataAndSize(state_tan.GetData() + offset, sdim);
+      vec_Jacob.SetDataAndSize(state.GetData() + offset, sdim);
+      jacob2ortho.Mult(vec_Jacob, vec_Ortho);
+      // Compute flux in orthogonal coordinate
+      real_t speed = fluxFunction.ComputeFlux(state_tan, Tr, FU_tan);
+      // revert it back to jacobian coordinate
+      MultABt(FU_tan, ortho2jacob, flux);
       return speed;
    }
 
-   real_t ComputeFluxDotN(const Vector &state, const Vector &normal,
-                          ElementTransformation &Tr, Vector &fluxDotN) const override
+   void Jacobian2OrthoCoord(ElementTransformation &Tr,
+                            DenseMatrix *result = nullptr,
+                            DenseMatrix *inv_result = nullptr) const
    {
-      const DenseMatrix &dir = Tr.Jacobian();
-      Vector tangent_normal(dim);
-      dir.MultTranspose(normal, tangent_normal);
-      return fluxFunction.ComputeFluxDotN(state, tangent_normal, Tr, fluxDotN);
-   }
+      // obtain local coordinate
+      DenseMatrix jacob = Tr.Jacobian();
+      Vector dir1, dir2;
+      jacob.GetColumnReference(0, dir1);
+      jacob.GetColumnReference(1, dir2);
+      // orthogonalize
+      real_t dir1_mag_squared = dir1*dir1;
+      real_t dir2_mag_squared = dir2*dir2;
+      Vector t2(dir2); // second tangent direction
+      real_t d1_coeff = -(dir1*dir2)/dir1_mag_squared;
+      t2.Add(d1_coeff, dir1);
+      real_t t2_norm = std::sqrt(t2*t2);
 
-//    DenseMatrix &UpdateDirection(ElementTransformation &Tr) const
-//    {
-//       dir=Tr.Jacobian();
-//       Vector dir1, dir2;
-//       dir.GetColumnReference(0, dir1);
-//       dir.GetColumnReference(1, dir2);
-//       dir1 *= 1.0 / dir1.Norml2();
-//       dir2.Add(-(dir1*dir2), dir1);
-//       dir2 *= 1.0 / dir2.Norml2();
-//       return dir;
-//    }
+      jacob2ortho(0,0) = 1.0 / std::sqrt(dir1_mag_squared);
+      jacob2ortho(1,0) = d1_coeff / t2_norm;
+      jacob2ortho(1,1) = 1.0 / t2_norm;
+
+      // from jacobian coordinate to orthogonal coordinate
+      ortho2jacob = jacob2ortho;
+      // from orthogonal coordinate to jacobian coordinate
+      ortho2jacob.Invert();
+
+      if (result) { result = &jacob2ortho; }
+      if (inv_result) { inv_result = &ortho2jacob; }
+   }
 };
 
 
@@ -74,19 +103,43 @@ class ManifoldRiemannSolver : public RiemannSolver
 {
 private:
    RiemannSolver &rsolver;
+   const ManifoldFlux &maniflux;
+   const int sdim;
+   const int offset;
 #ifndef MFEM_THREAD_SAFE
-   Vector tangent;
-   Vector n_L, n_R;
+   mutable Vector tangent;
+   mutable Vector n_L, n_R;
+   mutable DenseMatrix rot_L, rot_R;
+   mutable Vector state_L, state_R;
+   mutable Vector vec_T;
+   mutable Vector vec_L, vec_R;
 #endif
+
 public:
-   ManifoldRiemannSolver(const ManifoldFlux &maniflux,
-                         RiemannSolver &rsolver):RiemannSolver(maniflux), rsolver(rsolver)
+   ManifoldRiemannSolver(const ManifoldFlux &maniflux, int offset,
+                         RiemannSolver &rsolver)
+      : RiemannSolver(maniflux), rsolver(rsolver), maniflux(maniflux),
+        sdim(maniflux.sdim), offset(offset), vec_T(maniflux.dim)
    {
 #ifndef MFEM_THREAD_SAFE
-      tangent.SetSize(fluxFunction.sdim);
-      n_L.SetSize(fluxFunction.sdim);
-      n_R.SetSize(fluxFunction.sdim);
+      tangent.SetSize(sdim);
+      n_L.SetSize(sdim);
+      n_R.SetSize(sdim);
+      state_L.SetSize(fluxFunction.num_equations);
+      state_R.SetSize(fluxFunction.num_equations);
+      rot_L.SetSize(maniflux.dim);
+      rot_R.SetSize(maniflux.dim);
+      vec_L.SetSize(fluxFunction.dim);
+      vec_R.SetSize(fluxFunction.dim);
 #endif
+   }
+   virtual real_t Eval(const Vector &state1, const Vector &state2,
+                       const Vector &nor, FaceElementTransformations &Tr,
+                       Vector &flux) const
+
+   {
+
+      return 0.0;
    }
 };
 
