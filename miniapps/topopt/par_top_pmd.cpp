@@ -481,9 +481,9 @@ int main(int argc, char *argv[])
 
       // Check convergence
       stationarityError =
-         density.StationarityErrorL2(grad, 1e-03 / (grad * grad));
+         density.StationarityErrorL2(grad);
       stationarityError_bregman =
-         density.StationarityError(grad, 1e-03 / (grad * grad));
+         density.StationarityError(grad);
 
       {
          der_sig_form.Assemble();
