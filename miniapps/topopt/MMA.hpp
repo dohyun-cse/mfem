@@ -75,8 +75,7 @@ public:
 
 private:
    // Set up the MMA subproblem based on old x's and xval
-   PetscErrorCode GenSub(Vec xval, Vec dfdx, PetscScalar* gx, Vec* dgdx, Vec xmin,
-                         Vec xmax);
+   PetscErrorCode GenSub(Vec xval, Vec dfdx, PetscScalar* gx, Vec* dgdx, Vec xmin, Vec xmax);
 
    // Interior point solver for the subproblem
    PetscErrorCode SolveDIP(Vec xval);
