@@ -359,7 +359,7 @@ int main(int argc, char *argv[])
    logger.Print();
 
 
-   const double mv = 0.1;
+   const double mv = 0.2;
    ParGridFunction B(&control_fes), lower(&control_fes), upper(&control_fes);
    ParBilinearForm inv_mass(&control_fes);
    inv_mass.AddDomainIntegrator(new InverseIntegrator(new MassIntegrator));
