@@ -1138,8 +1138,7 @@ int Step_Bregman(TopOptProblem &problem, const GridFunction &x0,
          MPI_Allreduce(MPI_IN_PLACE, &d, 1, MPI_DOUBLE, MPI_SUM, comm);
       }
 #endif
-      if (new_val < val + d + 1.0 / step_size * density.ComputeBregmanDivergence(x_gf,
-                                                                                 x0) && d < 0) { break; }
+      if (new_val < val + d + density.ComputeBregmanDivergence(x_gf, x0)/step_size && d < 0) { break; }
    }
 
    return i;
@@ -1173,7 +1172,7 @@ int Step_Armijo(TopOptProblem &problem, const GridFunction &x0,
       x_gf.Add(-step_size, direction); // advance by updated step size
       new_val = problem.Eval(); // re-evaluate at the updated point
       diff_densityForm.Assemble(); // re-evaluate density difference inner-product
-      d = (diff_densityForm)(grad);
+      d = diff_densityForm(grad);
 #ifdef MFEM_USE_MPI
       if (pgrad)
       {

@@ -120,7 +120,7 @@ int main(int argc, char *argv[])
                   "positivity of bregman divergence");
    args.AddOption(
       &use_GBB, "-gbb", "--use-gbb", "-exp", "--exponential-stepsize",
-      "Use Generalized Barzilai-Borwein step size selection. Otherwise, use "
+     "Use Generalized Barzilai-Borwein step size selection. Otherwise, use "
       "exponential step size");
    args.Parse();
    if (!args.Good())
@@ -436,7 +436,7 @@ int main(int argc, char *argv[])
       else
       {
          num_reeval =
-            Step_Bregman(optprob, old_psi, grad, diff_rho_form, step_size);
+            Step_Bregman(optprob, old_psi, grad, diff_rho_form, step_size, 1000000);
       }
       compliance = optprob.GetValue();
       volume = density.GetVolume() / density.GetDomainVolume();
