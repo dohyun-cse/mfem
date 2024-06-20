@@ -72,8 +72,8 @@ int main(int argc, char *argv[])
    int IntOrderOffset = 1;
    int ser_ref_levels = 2;
    int par_ref_levels = 4;
-   int order = 2;
-   int order_sig = 2;
+   int order = 3;
+   int order_sig = 3;
    int ode_solver_type = 4;
    real_t t_final = 60.0;
    real_t dt = -0.01;

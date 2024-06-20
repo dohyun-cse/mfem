@@ -31,23 +31,23 @@ class ManifoldFlux : public FluxFunction
 {
 private:
    FluxFunction &fluxFunction;
-   mutable DenseMatrix FU_tan;
+   mutable DenseMatrix flux_ortho;
    mutable DenseMatrix jacob2ortho;
    mutable DenseMatrix ortho2jacob;
-   mutable Vector state_tan;
-   const int offset;
+   mutable Vector state_ortho;
 
 public:
+   const int offset;
    ManifoldFlux(FluxFunction &fluxFunction, const int sdim, const int offset)
       :FluxFunction(fluxFunction.num_equations, fluxFunction.dim, fluxFunction.sdim),
-       fluxFunction(fluxFunction), FU_tan(num_equations, dim), offset(offset),
+       fluxFunction(fluxFunction), flux_ortho(num_equations, dim), offset(offset),
        jacob2ortho(dim)
    {
       MFEM_ASSERT(sdim == 2 &&
                   dim == 3, "Currently, it only supports 2D surface in 3D");
    }
 
-   FluxFunction &GetFluxFunction() {return fluxFunction;}
+   FluxFunction &GetFluxFunction() const {return fluxFunction;}
 
    real_t ComputeFlux(const Vector &state, ElementTransformation &Tr,
                       DenseMatrix &flux) const override
@@ -55,15 +55,15 @@ public:
       // Update coordinate
       Jacobian2OrthoCoord(Tr);
       // state in orthogonal coordinate
-      state_tan = state;
+      state_ortho = state;
       Vector vec_Ortho, vec_Jacob;
-      vec_Ortho.SetDataAndSize(state_tan.GetData() + offset, sdim);
+      vec_Ortho.SetDataAndSize(state_ortho.GetData() + offset, sdim);
       vec_Jacob.SetDataAndSize(state.GetData() + offset, sdim);
       jacob2ortho.Mult(vec_Jacob, vec_Ortho);
       // Compute flux in orthogonal coordinate
-      real_t speed = fluxFunction.ComputeFlux(state_tan, Tr, FU_tan);
+      real_t speed = fluxFunction.ComputeFlux(state_ortho, Tr, flux_ortho);
       // revert it back to jacobian coordinate
-      MultABt(FU_tan, ortho2jacob, flux);
+      MultABt(flux_ortho, ortho2jacob, flux);
       return speed;
    }
 
@@ -106,20 +106,23 @@ private:
    const ManifoldFlux &maniflux;
    const int sdim;
    const int offset;
+   Vector unit_vec;
 #ifndef MFEM_THREAD_SAFE
    mutable Vector tangent;
+   mutable Vector surface_normal;
    mutable Vector n_L, n_R;
    mutable DenseMatrix rot_L, rot_R;
    mutable Vector state_L, state_R;
+   mutable Vector fluxN1_mani, fluxN2_mani;
    mutable Vector vec_T;
    mutable Vector vec_L, vec_R;
 #endif
 
 public:
-   ManifoldRiemannSolver(const ManifoldFlux &maniflux, int offset,
+   ManifoldRiemannSolver(const ManifoldFlux &maniflux,
                          RiemannSolver &rsolver)
       : RiemannSolver(maniflux), rsolver(rsolver), maniflux(maniflux),
-        sdim(maniflux.sdim), offset(offset), vec_T(maniflux.dim)
+        sdim(maniflux.sdim), offset(maniflux.offset), vec_T(maniflux.dim)
    {
 #ifndef MFEM_THREAD_SAFE
       tangent.SetSize(sdim);
@@ -127,10 +130,16 @@ public:
       n_R.SetSize(sdim);
       state_L.SetSize(fluxFunction.num_equations);
       state_R.SetSize(fluxFunction.num_equations);
+      fluxN1_mani.SetSize(fluxFunction.num_equations);
+      fluxN2_mani.SetSize(fluxFunction.num_equations);
       rot_L.SetSize(maniflux.dim);
       rot_R.SetSize(maniflux.dim);
       vec_L.SetSize(fluxFunction.dim);
       vec_R.SetSize(fluxFunction.dim);
+      unit_vec.SetSize(fluxFunction.dim);
+      surface_normal.SetSize(fluxFunction.sdim);
+      unit_vec = 0.0;
+      unit_vec[fluxFunction.dim - 1] = 1.0;
 #endif
    }
    virtual real_t Eval(const Vector &state1, const Vector &state2,
@@ -138,6 +147,41 @@ public:
                        Vector &flux) const
 
    {
+      // Preprocessing
+      FluxFunction &org_flux = maniflux.GetFluxFunction();
+      const DenseMatrix &edge_jacobian = Tr.Jacobian();
+      Vector tangent_const;
+      edge_jacobian.GetColumn(0, tangent_const);
+      tangent = tangent_const;
+      const real_t tangent_norm = std::sqrt(tangent*tangent);
+      tangent *= 1.0 / tangent_norm;
+      Vector dir1, dir2;
+
+      // Compute orthogonal system transformation from the first element
+      DenseMatrix j2o_E1, o2j_E1;
+      maniflux.Jacobian2OrthoCoord(*Tr.Elem1, &j2o_E1, &o2j_E1);
+      const DenseMatrix &J1 = Tr.Elem1->Jacobian();
+      state_L = state1;
+      vec_L.SetData(state_L.GetData() + offset);
+      J1.GetColumn(0, dir1);
+      J1.GetColumn(1, dir2);
+      dir1.cross3D(dir2, surface_normal);
+      tangent.cross3D(surface_normal, n_L);
+      n_L /= n_L.Norml2();
+      maniflux.GetFluxFunction().ComputeFluxDotN(state_L, unit_vec, Tr, fluxN1_mani);
+
+      // Compute orthogonal system transformation from the second element
+      DenseMatrix j2o_E2, o2j_E2;
+      maniflux.Jacobian2OrthoCoord(*Tr.Elem2, &j2o_E1, &o2j_E1);
+      const DenseMatrix &J2 = Tr.Elem2No >= 0 ? Tr.Elem2->Jacobian() : Tr.Elem1->Jacobian();
+      state_R = state2;
+      vec_R.SetData(state_R.GetData() + offset);
+      J2.GetColumn(0, dir1);
+      J2.GetColumn(1, dir2);
+      dir2.cross3D(dir2, surface_normal);
+      tangent.cross3D(surface_normal, n_R);
+      n_R /= n_R.Norml2();
+      maniflux.GetFluxFunction().ComputeFluxDotN(state_R, unit_vec, Tr, fluxN2_mani);
 
       return 0.0;
    }
