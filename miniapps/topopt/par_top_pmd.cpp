@@ -292,7 +292,7 @@ int main(int argc, char *argv[])
          sout_r << "parallel " << num_procs << " " << myid << "\n";
          sout_r.precision(8);
          sout_r << "solution\n"
-                << *pmesh << psi << "window_title 'Raw density ρ - PMD " << problem
+                << *pmesh << *rho_gf << "window_title 'Raw density ρ - PMD " << problem
                 << "'\n"
                 << "keys Rjl***************\n"
                 << flush;
@@ -461,8 +461,9 @@ int main(int argc, char *argv[])
          }
          if (sout_r.is_open())
          {
+           rho_gf->ProjectCoefficient(density.GetDensityCoefficient());
             sout_r << "parallel " << num_procs << " " << myid << "\n";
-            sout_r << "solution\n" << *pmesh << psi << flush;
+            sout_r << "solution\n" << *pmesh << *rho_gf << flush;
             MPI_Barrier(MPI_COMM_WORLD); // try to prevent streams from mixing
          }
          if (sout_KKT.is_open())
