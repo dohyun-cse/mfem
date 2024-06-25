@@ -55,7 +55,7 @@ int main(int argc, char *argv[])
    // Volume fraction. Use problem-dependent default value if not provided.
    // See switch statements below
    double vol_fraction = -1;
-   int max_it = 2e3;
+   int max_it = 2e2;
    double rho_min = 1e-06;
    double exponent = 3.0;
    double E = 1.0;
@@ -64,7 +64,7 @@ int main(int argc, char *argv[])
    bool glvis_visualization = true;
    bool save = false;
    bool paraview = true;
-   double tol_stationarity = 1e-04;
+   double tol_stationarity = 1e-03;
    double tol_compliance = 5e-05;
    bool use_bregman = true;
    bool armijo = true;

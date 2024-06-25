@@ -71,7 +71,7 @@ int main(int argc, char *argv[])
    // Volume fraction. Use problem-dependent default value if not provided.
    // See switch statements below
    double vol_fraction = -1;
-   int max_it = 2e3;
+   int max_it = 2e2;
    double rho_min = 1e-06;
    double exponent = 3.0;
    double E = 1.0;
@@ -80,7 +80,7 @@ int main(int argc, char *argv[])
    bool glvis_visualization = true;
    bool save = false;
    bool paraview = true;
-   double tol_stationarity = 1e-04;
+   double tol_stationarity = 1e-03;
    double tol_compliance = 5e-05;
    bool use_bregman = true;
    bool armijo = true;
@@ -316,9 +316,6 @@ int main(int argc, char *argv[])
    {
       if (!rho_gf)
       {
-         // rho_gf.reset(new ParGridFunction(&filter_fes));
-         // rho_gf->ProjectDiscCoefficient(density.GetDensityCoefficient(),
-         //                                GridFunction::AvgType::ARITHMETIC);
          rho_gf.reset(new ParGridFunction(psi));
          rho_gf->ProjectCoefficient(density.GetDensityCoefficient());
       }
@@ -335,7 +332,6 @@ int main(int argc, char *argv[])
       pd->Save();
    }
    double KKT0 = -infinity();
-   ConstantCoefficient const_cf(1e09);
    Array<int> material_bdr(ess_bdr_filter);
    for (auto &val : material_bdr)
    {

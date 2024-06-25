@@ -486,13 +486,13 @@ public:
                        bool clip_lower=false, bool clip_upper=false);
    double Project() override;
    double StationarityError(const GridFunction &grad,
-                            const double eps=1e-03) override
+                            const double eps=1e-04) override
    {
       return StationarityError(grad, false, eps);
    };
    double StationarityError(const GridFunction &grad, bool useL2norm,
-                            const double eps=1e-03);
-   double StationarityErrorL2(GridFunction &grad, const double eps=1e-03);
+                            const double eps=1e-04);
+   double StationarityErrorL2(GridFunction &grad, const double eps=1e-04);
    double ComputeBregmanDivergence(const GridFunction &p, const GridFunction &q);
    double ComputeVolume() override
    {

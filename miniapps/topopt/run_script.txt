@@ -1,7 +1,7 @@
 rm par_top_pmd;\
 rm par_top_oc;\
 rm par_top_mma;\
-make par_top_pmd par_top_pgd par_top_pmd_oc par_top_oc par_top_mma -j;\
-mpirun -np 8 ./par_top_pmd -rs 2 -rp 4 -p 1 -L2; mpirun -np 8 ./par_top_pmd -rs 2 -rp 5 -p 1 -L2;\
-mpirun -np 8 ./par_top_mma -rs 2 -rp 4 -p 1; mpirun -np 8 ./par_top_mma -rs 2 -rp 5 -p 1;\
-mpirun -np 8 ./par_top_oc -rs 2 -rp 4 -p 1; mpirun -np 8 ./par_top_oc -rs 2 -rp 5 -p 1;
+make par_top_pmd par_top_oc par_top_mma -j;\
+mpirun -np 8 ./par_top_pmd -rs 2 -rp 3 -p 1 -L2 -fr 0.07;mpirun -np 8 ./par_top_pmd -rs 2 -rp 4 -p 1 -L2 -fr 0.07; mpirun -np 8 ./par_top_pmd -rs 2 -rp 5 -p 1 -L2;\
+mpirun -np 8 ./par_top_oc -rs 2 -rp 3 -p 1 -fr 0.07;mpirun -np 8 ./par_top_oc -rs 2 -rp 4 -p 1 -fr 0.07; mpirun -np 8 ./par_top_oc -rs 2 -rp 5 -p 1 ;\
+mpirun -np 8 ./par_top_mma -rs 2 -rp 3 -p 1 -fr 0.07;mpirun -np 8 ./par_top_mma -rs 2 -rp 4 -p 1 -fr 0.07; mpirun -np 8 ./par_top_mma -rs 2 -rp 5 -p 1 ;\

@@ -242,12 +242,13 @@ void MBBPreRefine(double &filter_radius, double &vol_fraction,
    ess_bdr = 0; ess_bdr_filter = 0;
    ess_bdr(1, 3) = 1; // left : y-roller -> x fixed
    ess_bdr(2, 4) = 1; // right-bottom : x-roller -> y fixed
-   const Vector center({0.05, 0.95});
+   const Vector center({1.0/32.0, 1.0-1.0/32.0});
    vforce_cf.reset(new VectorFunctionCoefficient(2, [center](const Vector &x,
                                                              Vector &f)
    {
       f = 0.0;
-      if (x.DistanceTo(center) < 0.05) { f(1) = -1.0/0.01/0.01/25/M_PI; }
+      if (std::fabs(x[0]-center[0])<(1.0/32.0) &&
+          std::fabs(x[1]-center[1])<(1.0/32.0)) { f(1) = -1.0; }
    }));
 }
 void MBBPostRefine(int ser_ref_levels, int par_ref_levels,
@@ -355,29 +356,31 @@ void Torsion3PreRefine(double &filter_radius, double &vol_fraction,
                        std::unique_ptr<Mesh> &mesh, Array2D<int> &ess_bdr, Array<int> &ess_bdr_filter,
                        std::unique_ptr<VectorCoefficient> &vforce_cf)
 {
-   if (filter_radius < 0) { filter_radius = 0.05; }
-   if (vol_fraction < 0) { vol_fraction = 0.1; }
+   if (filter_radius < 0) { filter_radius = 0.005; }
+   if (vol_fraction < 0) { vol_fraction = 0.005; }
 
    // [1: bottom, 2: front, 3: right, 4: back, 5: left, 6: top]
-   *mesh = Mesh::MakeCartesian3D(6, 5, 5, mfem::Element::Type::HEXAHEDRON, 1.2,
-                                 1.0,
-                                 1.0);
+   *mesh = Mesh::MakeCartesian3D(5, 6, 6, mfem::Element::Type::HEXAHEDRON,
+                                 1.0, 1.2, 1.2);
    ess_bdr.SetSize(4, 8);
    ess_bdr_filter.SetSize(8);
    ess_bdr = 0; ess_bdr_filter = 0;
-   ess_bdr(0, 6) = 1;
+   ess_bdr(0, 6) = 1; // left circle is clamped
    ess_bdr_filter = -1; // all boundaries void
    ess_bdr_filter[6] = 0; // left circle is free
    ess_bdr_filter[7] = 0; // right circle is free
-   const Vector center({0.0, 0.5, 0.5});
+   const Vector center({0.0, 0.6, 0.6});
    vforce_cf.reset(new VectorFunctionCoefficient(3, [center](const Vector &x,
                                                              Vector &f)
    {
-      if (x[0] > 1.0)
+      if (x[0] > 0.95)
       {
-         f[0] = 0.0;
-         f[1] = -x[2];
-         f[2] = x[1];
+         if ((x[1]-center[1])*(x[1]-center[1])+(x[2]-center[2])*(x[2]-center[2]) < 0.04)
+         {
+            f[0] = 0.0;
+            f[1] = -(x[2]-0.6);
+            f[2] = (x[1]-0.6);
+         }
       }
       else
       {
@@ -389,11 +392,11 @@ void Torsion3PostRefine(int ser_ref_levels, int par_ref_levels,
                         std::unique_ptr<Mesh> &mesh)
 {
    // left center: Dirichlet
-   Vector center({0.0, 0.5, 0.5});
+   Vector center({0.0, 0.6, 0.6});
    mesh->MarkBoundary([center](const Vector &x) { return (center.DistanceTo(x) < 0.2); },
    7);
    // Right center: Torsion
-   center[0] = 1.2;
+   center[0] = 1.0;
    mesh->MarkBoundary([center](const Vector &x) { return (center.DistanceTo(x) < 0.2); },
    8);
    mesh->SetAttributes();

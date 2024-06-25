@@ -655,7 +655,7 @@ double LatentDesignDensity::StationarityError(const GridFunction &grad,
    }
    else
    {
-      d = ComputeBregmanDivergence(*x_gf, *tmp_gf);
+      d = std::sqrt(ComputeBregmanDivergence(*x_gf, *tmp_gf));
    }
    // Restore solution and recompute volume
    *x_gf = *tmp_gf;
@@ -669,10 +669,11 @@ double LatentDesignDensity::ComputeBregmanDivergence(const GridFunction &p,
    MappedPairGridFunctionCoeffitient Dh(&p, &q, [this](double x, double y)
    {
       double p = d2p(x); double q = d2p(y);
-      return h(p) - h(q) - y*(p-q);
+      double result = h(p) - h(q) - y*(p-q);
+      return std::max(0.0, result);
    });
    // Since Bregman divergence is always positive, ||Dh||_L¹=∫_Ω Dh.
-   return std::sqrt(zero_gf->ComputeL1Error(Dh));
+   return zero_gf->ComputeL1Error(Dh);
 }
 
 double LatentDesignDensity::StationarityErrorL2(GridFunction &grad,
@@ -690,8 +691,8 @@ double LatentDesignDensity::StationarityErrorL2(GridFunction &grad,
    if (VolumeConstraintViolated())
    {
 
-      double c_l = target_volume_fraction - (1.0 - eps*grad.Min());
-      double c_r = target_volume_fraction - (0.0 - eps*grad.Max());
+      double c_l = -1e04;
+      double c_r = 1e04;
 #ifdef MFEM_USE_MPI
       auto pfes = dynamic_cast<ParFiniteElementSpace*>(x_gf->FESpace());
       if (pfes)
@@ -1119,26 +1120,42 @@ int Step_Bregman(TopOptProblem &problem, const GridFunction &x0,
    if (Mpi::IsInitialized()) { myrank = Mpi::WorldRank(); }
 #endif
    auto &density = static_cast<LatentDesignDensity&>(problem.GetDesignDensity());
+   MappedPairGridFunctionCoeffitient bregman(&x_gf, &x0,
+                                             [](const double x_new, const double x_old)
+   {
+      const double rho_new = sigmoid(x_new);
+      const double rho_old = sigmoid(x_old);
+      return std::max(0.0, rho_new * (x_new - x_old)
+             + safe_log(1.0 - rho_new) - safe_log( 1.0 - rho_old));
+   });
+   std::unique_ptr<LinearForm> bregman_form(MakeLinearForm(x_gf.FESpace()));
+   bregman_form->AddDomainIntegrator(new DomainLFIntegrator(bregman));
 
-   double new_val, d;
+   double new_val, d, distance;
    int i;
    step_size /= shrink_factor;
    for (i=0; i<max_it; i++)
    {
-      if (myrank == 0) { out << i << std::flush << "\r"; }
-      step_size *= shrink_factor; // reduce step size
+      if (myrank == 0) { out << i << std::flush << "\r"; } step_size *= shrink_factor; // reduce step size
       x_gf = x0; // restore original position
       x_gf.Add(-step_size, direction); // advance by updated step size
       new_val = problem.Eval(); // re-evaluate at the updated point
       diff_densityForm.Assemble(); // re-evaluate density difference inner-product
       d = (diff_densityForm)(grad);
+      bregman_form->Assemble();
+      distance = bregman_form->Sum();
 #ifdef MFEM_USE_MPI
       if (pgrad)
       {
          MPI_Allreduce(MPI_IN_PLACE, &d, 1, MPI_DOUBLE, MPI_SUM, comm);
+         MPI_Allreduce(MPI_IN_PLACE, &distance, 1, MPI_DOUBLE, MPI_SUM, comm);
       }
 #endif
-      if (new_val < val + d + density.ComputeBregmanDivergence(x_gf, x0)/step_size && d < 0) { break; }
+      double distance2 = density.ComputeBregmanDivergence(x_gf, x0);
+      if (Mpi::Root()) {out << distance << ", " << distance2 << std::endl;}
+
+      if (new_val < val + d + density.ComputeBregmanDivergence(x_gf, x0)/step_size &&
+          d < 0) { break; }
    }
 
    return i;
