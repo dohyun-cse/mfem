@@ -267,6 +267,7 @@ protected:
    Array<int> ess_tdof_list;
    bool symmetric;
    bool iterative_mode;
+   int max_it;
 #ifdef MFEM_USE_MPI
    bool parallel; // Flag for ParFiniteElementSpace
    MPI_Comm comm;
@@ -283,6 +284,7 @@ public:
    /// @param b Linear Form
    /// @param ess_bdr_list Component-wise essential boundary marker for boundary attributes, [Row0: all, Row1: x, ...]
    EllipticSolver(BilinearForm &a, LinearForm &b, Array2D<int> &ess_bdr);
+   void SetMaxIt(int new_max_it) { max_it = new_max_it; }
 
    /// @brief Solve linear system and return FEM solution in x.
    /// @param x FEM solution
@@ -741,6 +743,7 @@ protected:
    {
       EllipticSolver solver(*a, *b, ess_bdr);
       solver.SetIterativeMode();
+      solver.SetMaxIt(1e06);
       bool converged = solver.Solve(x, AisStationary, BisStationary);
       if (!converged)
       {
@@ -810,6 +813,7 @@ protected:
    {
       EllipticSolver solver(*a, *b, ess_bdr);
       solver.SetIterativeMode();
+      solver.SetMaxIt(1e06);
       bool converged = solver.Solve(x, AisStationary, BisStationary);
       if (!converged)
       {

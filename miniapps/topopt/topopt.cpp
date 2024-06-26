@@ -6,7 +6,7 @@ namespace mfem
 {
 EllipticSolver::EllipticSolver(BilinearForm &a, LinearForm &b,
                                Array<int> &ess_bdr_list):
-   a(a), b(b), ess_bdr(1, ess_bdr_list.Size()), ess_tdof_list(0), symmetric(false)
+   a(a), b(b), ess_bdr(1, ess_bdr_list.Size()), ess_tdof_list(0), symmetric(false), max_it(1e04)
 {
    for (int i=0; i<ess_bdr_list.Size(); i++)
    {
@@ -23,7 +23,7 @@ EllipticSolver::EllipticSolver(BilinearForm &a, LinearForm &b,
 EllipticSolver::EllipticSolver(BilinearForm &a, LinearForm &b,
                                Array2D<int> &ess_bdr):
    a(a), b(b), ess_bdr(ess_bdr), ess_tdof_list(0), symmetric(false),
-   iterative_mode(false)
+   iterative_mode(false), max_it(1e04)
 {
 #ifdef MFEM_USE_MPI
    auto pfes = dynamic_cast<ParFiniteElementSpace*>(a.FESpace());
@@ -165,7 +165,7 @@ bool EllipticSolver::Solve(GridFunction &x, bool A_assembled,
    cg.reset(new CGSolver);
 #endif
    cg->SetRelTol(1e-14);
-   cg->SetMaxIter(10000);
+   cg->SetMaxIter(max_it);
    cg->SetPrintLevel(0);
    cg->SetPreconditioner(*M);
    cg->SetOperator(*A);
@@ -220,7 +220,7 @@ bool EllipticSolver::SolveTranspose(GridFunction &x, LinearForm &f,
    cg.reset(new CGSolver);
 #endif
    cg->SetRelTol(1e-14);
-   cg->SetMaxIter(10000);
+   cg->SetMaxIter(max_it);
    cg->SetPrintLevel(0);
    cg->SetPreconditioner(*M);
    cg->SetOperator(*A);
@@ -1252,6 +1252,7 @@ void HelmholtzFilter::Apply(Coefficient &rho, GridFunction &frho,
 
    EllipticSolver solver(*filter, *rhoform, ess_bdr);
    solver.SetIterativeMode();
+   solver.SetMaxIt(1e06);
    bool converged = solver.Solve(frho, true, false);
 
    if (!converged)
