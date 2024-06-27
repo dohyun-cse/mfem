@@ -339,14 +339,13 @@ void Cantilever3PreRefine(double &filter_radius, double &vol_fraction,
    ess_bdr_filter[0] = -1;
    ess_bdr_filter[5] = -1;
 
-   const Vector center({1.9, 0.1, 0.1});
+   const Vector center({1.9, 0.5, 0.5});
    // force(0) = 0.0; force(1) = 0.0; force(2) = -1.0;
    vforce_cf.reset(new VectorFunctionCoefficient(3, [center](const Vector &x,
                                                              Vector &f)
    {
       f = 0.0;
-      Vector xx(x); xx(1) = center(1);
-      if (xx.DistanceTo(center) < 0.05) { f(2) = -std::sin(M_PI*x(1)); }
+      if (x.DistanceTo(center) < 0.05) { f(2) = -1.0; }
    }));
 }
 void Cantilever3PostRefine(int ser_ref_levels, int par_ref_levels,
