@@ -76,7 +76,7 @@ int main(int argc, char *argv[])
    double nu = 0.3;
    double c1 = 1e-04;
    bool glvis_visualization = true;
-   bool save = false;
+   bool save = true;
    bool paraview = true;
    double tol_stationarity = 1e-03;
    double tol_compliance = 5e-05;
@@ -364,9 +364,15 @@ int main(int argc, char *argv[])
               << par_ref_levels << "-0." << setfill('0') << setw(6) << myid;
       std::ifstream in;
       in.open(solfile.str().c_str(), std::ios::in);
-      mfem::ParGridFunction ndes(pmesh.get(), in);
-      in.close();
-      psi.ProjectGridFunction(ndes);
+      if (in.good())
+      {
+
+         mfem::ParGridFunction ndes(pmesh.get(), in);
+         in.close();
+         psi.ProjectGridFunction(ndes);
+
+
+      }
    }
 
    if (Mpi::Root())
