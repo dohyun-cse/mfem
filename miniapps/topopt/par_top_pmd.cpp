@@ -66,10 +66,8 @@ int main(int argc, char *argv[])
    int par_ref_levels = 6;
    int order = 1;
    // filter radius. Use problem-dependent default value if not provided.
-   // See switch statements below
    double filter_radius = -1;
    // Volume fraction. Use problem-dependent default value if not provided.
-   // See switch statements below
    double vol_fraction = -1;
    int max_it = 2e2;
    double rho_min = 1e-06;
@@ -83,6 +81,7 @@ int main(int argc, char *argv[])
    double tol_stationarity = 1e-03;
    double tol_compliance = 5e-05;
    bool use_bregman = true;
+   bool restart = true;
    bool armijo = true;
    bool use_GBB = true;
    ostringstream filename_prefix;
@@ -114,13 +113,15 @@ int main(int argc, char *argv[])
                   "Enable or disable GLVis visualization.");
    args.AddOption(&use_bregman, "-bregman", "--use-bregman", "-L2", "--use-L2",
                   "Use Bregman divergence as a stopping criteria");
+   args.AddOption(&restart, "-init", "--restart", "-no-init", "--no-init-cond",
+                  "Restart from a saved gridfunction");
    args.AddOption(&armijo, "-armijo", "--use-armijo", "-pos-bregman",
                   "--positive-bregman-condition",
                   "Use Armijo condition for step size selection. Otherwise, use "
                   "positivity of bregman divergence");
    args.AddOption(
       &use_GBB, "-gbb", "--use-gbb", "-exp", "--exponential-stepsize",
-     "Use Generalized Barzilai-Borwein step size selection. Otherwise, use "
+      "Use Generalized Barzilai-Borwein step size selection. Otherwise, use "
       "exponential step size");
    args.Parse();
    if (!args.Good())
@@ -356,6 +357,18 @@ int main(int argc, char *argv[])
    one_gf = 1.0;
    ParGridFunction tmp_rho_gf(&control_fes);
 
+   if (restart)
+   {
+      ostringstream solfile;
+      solfile << filename_prefix.str() << "-" << seq_ref_levels << "-"
+              << par_ref_levels << "-0." << setfill('0') << setw(6) << myid;
+      std::ifstream in;
+      in.open(solfile.str().c_str(), std::ios::in);
+      mfem::ParGridFunction ndes(pmesh.get(), in);
+      in.close();
+      psi.ProjectGridFunction(ndes);
+   }
+
    if (Mpi::Root())
       mfem::out << "\n"
                 << "Initialization Done." << "\n"
@@ -443,6 +456,21 @@ int main(int argc, char *argv[])
          projected_grad_selfload->Assemble();
          grad.Add(2.0, *projected_grad_selfload);
       }
+      if (save)
+      {
+         ostringstream solfile, solfile2;
+         solfile << filename_prefix.str() << "-" << seq_ref_levels << "-"
+                 << par_ref_levels << "-0." << setfill('0') << setw(6) << myid;
+         solfile2 << filename_prefix.str() << "-" << seq_ref_levels << "-"
+                  << par_ref_levels << "-f." << setfill('0') << setw(6) << myid;
+         ofstream sol_ofs(solfile.str().c_str());
+         sol_ofs.precision(8);
+         sol_ofs << psi;
+
+         ofstream sol_ofs2(solfile2.str().c_str());
+         sol_ofs2.precision(8);
+         sol_ofs2 << density.GetFilteredDensity();
+      }
 
       // Step 4. Visualization
       if (glvis_visualization)
@@ -457,7 +485,7 @@ int main(int argc, char *argv[])
          }
          if (sout_r.is_open())
          {
-           rho_gf->ProjectCoefficient(density.GetDensityCoefficient());
+            rho_gf->ProjectCoefficient(density.GetDensityCoefficient());
             sout_r << "parallel " << num_procs << " " << myid << "\n";
             sout_r << "solution\n" << *pmesh << *rho_gf << flush;
             MPI_Barrier(MPI_COMM_WORLD); // try to prevent streams from mixing
@@ -544,21 +572,6 @@ int main(int argc, char *argv[])
       {
          mfem::out << "Maximum iteration reached." << std::endl;
       }
-   }
-   if (save)
-   {
-      ostringstream solfile, solfile2;
-      solfile << filename_prefix.str() << "-" << seq_ref_levels << "-"
-              << par_ref_levels << "-0." << setfill('0') << setw(6) << myid;
-      solfile2 << filename_prefix.str() << "-" << seq_ref_levels << "-"
-               << par_ref_levels << "-f." << setfill('0') << setw(6) << myid;
-      ofstream sol_ofs(solfile.str().c_str());
-      sol_ofs.precision(8);
-      sol_ofs << psi;
-
-      ofstream sol_ofs2(solfile2.str().c_str());
-      sol_ofs2.precision(8);
-      sol_ofs2 << density.GetFilteredDensity();
    }
 
    return 0;
