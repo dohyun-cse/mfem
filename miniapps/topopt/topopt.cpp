@@ -6,7 +6,8 @@ namespace mfem
 {
 EllipticSolver::EllipticSolver(BilinearForm &a, LinearForm &b,
                                Array<int> &ess_bdr_list):
-   a(a), b(b), ess_bdr(1, ess_bdr_list.Size()), ess_tdof_list(0), symmetric(false), max_it(1e04)
+   a(a), b(b), ess_bdr(1, ess_bdr_list.Size()), ess_tdof_list(0), symmetric(false),
+   max_it(1e04), elasticity(false)
 {
    for (int i=0; i<ess_bdr_list.Size(); i++)
    {
@@ -144,26 +145,43 @@ bool EllipticSolver::Solve(GridFunction &x, bool A_assembled,
    a.RecoverFEMSolution(X, b, x);
    bool converged = true;
 #else
-   std::unique_ptr<CGSolver> cg;
-   std::unique_ptr<Solver> M;
 #ifdef MFEM_USE_MPI
    if (parallel)
    {
-      auto M_ptr = new HypreBoomerAMG(static_cast<HypreParMatrix&>(*A));
-      M_ptr->SetPrintLevel(0);
+      auto M = std::unique_ptr<HypreBoomerAMG>(new HypreBoomerAMG(
+                                                  static_cast<HypreParMatrix&>(*A)));
+      M->SetPrintLevel(0);
+      if (elasticity)
+      {
+        M->SetElasticityOptions(static_cast<ParFiniteElementSpace*>(x.FESpace()));
+      }
 
-      M.reset(M_ptr);
-      cg.reset(new CGSolver(comm));
+      auto cg = std::unique_ptr<HyprePCG>(new HyprePCG(comm));
+      cg->SetTol(1e-14);
+      cg->SetMaxIter(max_it);
+      cg->SetPrintLevel(0);
+      cg->SetPreconditioner(*M);
+      cg->SetOperator(*A);
+      cg->iterative_mode = iterative_mode;
+      cg->Mult(B, X);
    }
    else
    {
-      M.reset(new GSSmoother(static_cast<SparseMatrix&>(*A)));
-      cg.reset(new CGSolver);
+      auto M = std::unique_ptr<GSSmoother>(new GSSmoother(static_cast<SparseMatrix&>
+                                                          (*A)));
+      auto cg = std::unique_ptr<CGSolver>(new CGSolver);
+      cg->SetRelTol(1e-14);
+      cg->SetMaxIter(max_it);
+      cg->SetPrintLevel(0);
+      cg->SetPreconditioner(*M);
+      cg->SetOperator(*A);
+      cg->iterative_mode = iterative_mode;
+      cg->Mult(B, X);
    }
 #else
-   M.reset(new GSSmoother(static_cast<SparseMatrix&>(*A)));
-   cg.reset(new CGSolver);
-#endif
+   auto M = std::unique_ptr<GSSmoother>(new GSSmoother(static_cast<SparseMatrix&>
+                                                       (*A)));
+   auto cg = std::unique_ptr<CGSolver>(new CGSolver);
    cg->SetRelTol(1e-14);
    cg->SetMaxIter(max_it);
    cg->SetPrintLevel(0);
@@ -171,11 +189,11 @@ bool EllipticSolver::Solve(GridFunction &x, bool A_assembled,
    cg->SetOperator(*A);
    cg->iterative_mode = iterative_mode;
    cg->Mult(B, X);
+#endif
    a.RecoverFEMSolution(X, b, x);
-   bool converged = cg->GetConverged();
 #endif
 
-   return converged;
+   return true;
 }
 
 bool EllipticSolver::SolveTranspose(GridFunction &x, LinearForm &f,
@@ -1126,7 +1144,7 @@ int Step_Bregman(TopOptProblem &problem, const GridFunction &x0,
       const double rho_new = sigmoid(x_new);
       const double rho_old = sigmoid(x_old);
       return std::max(0.0, rho_new * (x_new - x_old)
-             + safe_log(1.0 - rho_new) - safe_log( 1.0 - rho_old));
+                      + safe_log(1.0 - rho_new) - safe_log( 1.0 - rho_old));
    });
    std::unique_ptr<LinearForm> bregman_form(MakeLinearForm(x_gf.FESpace()));
    bregman_form->AddDomainIntegrator(new DomainLFIntegrator(bregman));
@@ -1136,7 +1154,8 @@ int Step_Bregman(TopOptProblem &problem, const GridFunction &x0,
    step_size /= shrink_factor;
    for (i=0; i<max_it; i++)
    {
-      if (myrank == 0) { out << i << std::flush << "\r"; } step_size *= shrink_factor; // reduce step size
+      if (myrank == 0) { out << i << std::flush << "\r"; } step_size *=
+         shrink_factor; // reduce step size
       x_gf = x0; // restore original position
       x_gf.Add(-step_size, direction); // advance by updated step size
       new_val = problem.Eval(); // re-evaluate at the updated point
