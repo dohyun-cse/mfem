@@ -153,7 +153,7 @@ bool EllipticSolver::Solve(GridFunction &x, bool A_assembled,
       M->SetPrintLevel(0);
       if (elasticity)
       {
-        M->SetElasticityOptions(static_cast<ParFiniteElementSpace*>(x.FESpace()));
+         M->SetElasticityOptions(static_cast<ParFiniteElementSpace*>(x.FESpace()));
       }
 
       auto cg = std::unique_ptr<HyprePCG>(new HyprePCG(comm));
@@ -693,6 +693,49 @@ double LatentDesignDensity::ComputeBregmanDivergence(const GridFunction &p,
    // Since Bregman divergence is always positive, ||Dh||_L¹=∫_Ω Dh.
    return zero_gf->ComputeL1Error(Dh);
 }
+double FermiDiracDesignDensity::ComputeBregmanDivergence(const GridFunction &p,
+                                                         const GridFunction &q)
+{
+   MappedPairGridFunctionCoeffitient Dh(&p, &q, [this](double x, double y)
+   {
+      double p = sigmoid(x); double q = sigmoid(y);
+      double result;
+      switch (2*(x>0) + (y>0))
+      {
+         //          y
+         //          |
+         //     2    |     3         ln(p) - x
+         //          |
+         // ---------+---------> x
+         //          |
+         //     0    |     1         ln(1-p)
+         //          |
+         // ln(1-q)     ln(q)-y
+         case 0: // x < 0 and y < 0
+            result = p*(x-y) + safe_log((1-p)/(1-q));
+            if (result < -1e-6) {out << p*(x-y) << ", " << safe_log((1-p)/(1-q)) << " Negative Value - 0.\n"; }
+            break;
+         case 1: // x < 0 and y > 0
+            result = p*(x-y) + y + safe_log((1-p)/q);
+            if (result < -1e-6) {out << p*(x-y) << ", " << safe_log(1-p) - safe_log(q) + y << " Negative Value - 1.\n"; }
+            break;
+         case 2: // x > 0 and y < 0
+            result = p*(x-y) - x + safe_log(p/(1-q));
+            if (result < -1e-6) {out << p*(x-y) << ", " << safe_log(p) - x - safe_log(1-q) << " Negative Value - 2.\n"; }
+            break;
+         case 3: // x > 0 and y > 0
+            result = (p-1)*(x-y) + safe_log(p/q);
+            if (result < -1e-06) {out << (p-1)*(x-y) << ", " << safe_log(p/q) << " Negative Value - 3.\n"; }
+            break;
+         default: // Just to compiler stop complaining...
+            result = 0.0;
+            break;
+      }
+      return std::max(result, 0.0);
+   });
+   // Since Bregman divergence is always positive, ||Dh||_L¹=∫_Ω Dh.
+   return zero_gf->ComputeL1Error(Dh);
+}
 
 double LatentDesignDensity::StationarityErrorL2(GridFunction &grad,
                                                 const double eps)
@@ -1137,7 +1180,8 @@ int Step_Bregman(TopOptProblem &problem, const GridFunction &x0,
    if (pgrad) { comm = pgrad->ParFESpace()->GetComm(); }
    if (Mpi::IsInitialized()) { myrank = Mpi::WorldRank(); }
 #endif
-   auto &density = static_cast<LatentDesignDensity&>(problem.GetDesignDensity());
+   auto &density = static_cast<FermiDiracDesignDensity&>
+                   (problem.GetDesignDensity());
    MappedPairGridFunctionCoeffitient bregman(&x_gf, &x0,
                                              [](const double x_new, const double x_old)
    {
@@ -1170,9 +1214,6 @@ int Step_Bregman(TopOptProblem &problem, const GridFunction &x0,
          MPI_Allreduce(MPI_IN_PLACE, &distance, 1, MPI_DOUBLE, MPI_SUM, comm);
       }
 #endif
-      double distance2 = density.ComputeBregmanDivergence(x_gf, x0);
-      if (Mpi::Root()) {out << distance << ", " << distance2 << std::endl;}
-
       if (new_val < val + d + density.ComputeBregmanDivergence(x_gf, x0)/step_size &&
           d < 0) { break; }
    }

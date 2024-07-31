@@ -473,12 +473,12 @@ class LatentDesignDensity : public DesignDensity
    // variables
 public:
 protected:
+   std::unique_ptr<GridFunction> zero_gf;
 private:
    std::function<double(double)> h;
    std::function<double(double)> p2d;
    std::function<double(double)> d2p;
    bool clip_lower, clip_upper;
-   std::unique_ptr<GridFunction> zero_gf;
    bool use_primal_filter;
    // functions
 public:
@@ -497,7 +497,7 @@ public:
    double StationarityError(const GridFunction &grad, bool useL2norm,
                             const double eps=1e-04);
    double StationarityErrorL2(GridFunction &grad, const double eps=1e-04);
-   double ComputeBregmanDivergence(const GridFunction &p, const GridFunction &q);
+   virtual double ComputeBregmanDivergence(const GridFunction &p, const GridFunction &q);
    double ComputeVolume() override
    {
       current_volume = zero_gf->ComputeL1Error(*rho_cf);
@@ -526,6 +526,19 @@ public:
    }
 protected:
 private:
+};
+
+class FermiDiracDesignDensity : public LatentDesignDensity
+{
+  public:
+   FermiDiracDesignDensity(FiniteElementSpace &fes,
+                       DensityFilter &filter, double vol_frac,
+                       std::function<double(double)> h,
+                       std::function<double(double)> primal2dual,
+                       std::function<double(double)> dual2primal,
+                       bool clip_lower=false, bool clip_upper=false):
+     LatentDesignDensity(fes, filter, vol_frac, h, primal2dual, dual2primal, clip_lower, clip_upper){};
+   double ComputeBregmanDivergence(const GridFunction &p, const GridFunction &q) override;
 };
 
 class PrimalDesignDensity : public DesignDensity

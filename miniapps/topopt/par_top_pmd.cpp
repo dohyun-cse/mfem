@@ -49,6 +49,24 @@
 using namespace std;
 using namespace mfem;
 
+
+double shell(const Vector &x, const double radius, const double thickness,
+             const double psi_min, const double psi_max)
+{
+   Vector center(3);
+   center[0] = 0.5; center[1] = 0.6; center[2] = 0.6;
+   double r = x.DistanceTo(center) - radius;
+   return std::exp(-r*r/thickness)*psi_max + psi_min;
+}
+
+void shell_design(GridFunction &psi, const double radius,
+                  const double thickness, const double psi_min, const double psi_max)
+{
+   FunctionCoefficient coeff([radius, thickness, psi_min,
+           psi_max](const Vector &x) {return shell(x, radius, thickness, psi_min, psi_max);});
+   psi.ProjectCoefficient(coeff);
+}
+
 int main(int argc, char *argv[])
 {
    Mpi::Init();
@@ -203,10 +221,11 @@ int main(int argc, char *argv[])
    SIMPProjector densityProjector(exponent, rho_min);
    HelmholtzFilter filter(filter_fes, filter_radius / (2.0 * sqrt(3.0)),
                           ess_bdr_filter, true);
-   LatentDesignDensity density(control_fes, filter, vol_fraction,
-                               FermiDiracEntropy, inv_sigmoid, sigmoid, false,
-                               false);
+   FermiDiracDesignDensity density(control_fes, filter, vol_fraction,
+                                   FermiDiracEntropy, inv_sigmoid, sigmoid, false,
+                                   false);
    density.UsePrimalFilter(true);
+   // if (problem == ElasticityProblem::Torsion3) { shell_design(density.GetGridFunction(), 0.4, 0.05, -10, 10); }
 
    ConstantCoefficient E_cf(E), nu_cf(nu);
    ParametrizedElasticityEquation elasticity(
@@ -505,8 +524,8 @@ int main(int argc, char *argv[])
       }
       if (paraview)
       {
-         pd->SetCycle(k + 1);
-         pd->SetTime(k + 1);
+         pd->SetCycle(0);
+         pd->SetTime(0);
          pd->Save();
       }
 
