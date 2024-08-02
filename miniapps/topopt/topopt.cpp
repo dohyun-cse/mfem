@@ -24,7 +24,7 @@ EllipticSolver::EllipticSolver(BilinearForm &a, LinearForm &b,
 EllipticSolver::EllipticSolver(BilinearForm &a, LinearForm &b,
                                Array2D<int> &ess_bdr):
    a(a), b(b), ess_bdr(ess_bdr), ess_tdof_list(0), symmetric(false),
-   iterative_mode(false), max_it(1e04)
+   iterative_mode(false), max_it(1e08)
 {
 #ifdef MFEM_USE_MPI
    auto pfes = dynamic_cast<ParFiniteElementSpace*>(a.FESpace());
@@ -195,63 +195,6 @@ bool EllipticSolver::Solve(GridFunction &x, bool A_assembled,
 
    return true;
 }
-
-bool EllipticSolver::SolveTranspose(GridFunction &x, LinearForm &f,
-                                    bool A_assembled, bool f_Assembled)
-{
-   OperatorPtr A;
-   Vector B, X;
-
-   if (!A_assembled) { a.Assemble(); }
-   if (!f_Assembled) { f.Assemble(); }
-
-   a.FormLinearSystem(ess_tdof_list, x, f, A, X, B, true);
-
-#ifdef MFEM_USE_SUITESPARSE
-   UMFPackSolver umf_solver;
-   umf_solver.Control[UMFPACK_ORDERING] = UMFPACK_ORDERING_CHOLMOD;
-   umf_solver.SetOperator(*A);
-   umf_solver.Mult(B, X);
-   a.RecoverFEMSolution(X, *f, x);
-   bool converged = true;
-#else
-   std::unique_ptr<CGSolver> cg;
-   std::unique_ptr<Solver> M;
-#ifdef MFEM_USE_MPI
-   if (parallel)
-   {
-      M.reset(new HypreBoomerAMG);
-      auto M_ptr = new HypreBoomerAMG;
-      M_ptr->SetPrintLevel(0);
-
-      M.reset(M_ptr);
-      cg.reset(new CGSolver((dynamic_cast<ParFiniteElementSpace*>
-                             (a.FESpace()))->GetComm()));
-   }
-   else
-   {
-      M.reset(new GSSmoother((SparseMatrix&)(*A)));
-      cg.reset(new CGSolver);
-   }
-#else
-   M.reset(new GSSmoother((SparseMatrix&)(*A)));
-   cg.reset(new CGSolver);
-#endif
-   cg->SetRelTol(1e-14);
-   cg->SetMaxIter(max_it);
-   cg->SetPrintLevel(0);
-   cg->SetPreconditioner(*M);
-   cg->SetOperator(*A);
-   cg->iterative_mode = iterative_mode;
-   cg->Mult(B, X);
-   a.RecoverFEMSolution(X, f, x);
-   bool converged = cg->GetConverged();
-#endif
-
-   return converged;
-}
-
-
 
 void IsoElasticityIntegrator::VectorGradToVoigt(DenseMatrix &vals,
                                                 DenseMatrix &voigt)
