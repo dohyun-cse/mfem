@@ -283,7 +283,7 @@ int main(int argc, char *argv[])
    // 10. Connect to GLVis. Prepare for VisIt output.
    char vishost[] = "localhost";
    int visport = 19916;
-   socketstream sout_frho, sout_r, sout_KKT;
+   socketstream sout_frho, sout_r, sout_KKT, sout_u;
    std::unique_ptr<ParGridFunction> designDensity_gf, rho_gf;
    ParGridFunction KKT_gf(&control_fes);
    if (glvis_visualization)
@@ -328,6 +328,18 @@ int main(int argc, char *argv[])
                   << "'\n"
                   << "keys Rjl***************\n"
                   << flush;
+         MPI_Barrier(MPI_COMM_WORLD); // try to prevent streams from mixing
+      }
+      sout_u.open(vishost, visport);
+      if (sout_u.is_open())
+      {
+         sout_u << "parallel " << num_procs << " " << myid << "\n";
+         sout_u.precision(8);
+         sout_u << "solution\n"
+                   << *pmesh << u
+                   << "window_title 'displacement - PMD " << problem << "'\n"
+                   << "keys Rjl***************\n"
+                   << flush;
          MPI_Barrier(MPI_COMM_WORLD); // try to prevent streams from mixing
       }
    }
@@ -519,6 +531,14 @@ int main(int argc, char *argv[])
          {
             sout_KKT << "parallel " << num_procs << " " << myid << "\n";
             sout_KKT << "solution\n" << *pmesh << KKT_gf << flush;
+            MPI_Barrier(MPI_COMM_WORLD); // try to prevent streams from mixing
+         }
+         if (sout_u.is_open())
+         {
+            // designDensity_gf->ProjectCoefficient(densityProjector.GetPhysicalDensity(
+            //                                         density.GetFilteredDensity()));
+            sout_u << "parallel " << num_procs << " " << myid << "\n";
+            sout_u << "solution\n" << *pmesh << u << flush;
             MPI_Barrier(MPI_COMM_WORLD); // try to prevent streams from mixing
          }
       }
