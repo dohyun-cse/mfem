@@ -641,40 +641,16 @@ double FermiDiracDesignDensity::ComputeBregmanDivergence(const GridFunction &p,
 {
    MappedPairGridFunctionCoeffitient Dh(&p, &q, [this](double x, double y)
    {
-      double p = sigmoid(x); double q = sigmoid(y);
-      double result;
-      switch (2*(x>0) + (y>0))
-      {
-         //          y
-         //          |
-         //     2    |     3         ln(p) - x
-         //          |
-         // ---------+---------> x
-         //          |
-         //     0    |     1         ln(1-p)
-         //          |
-         // ln(1-q)     ln(q)-y
-         case 0: // x < 0 and y < 0
-            result = p*(x-y) + safe_log((1-p)/(1-q));
-            if (result < -1e-6) {out << p*(x-y) << ", " << safe_log((1-p)/(1-q)) << " Negative Value - 0.\n"; }
-            break;
-         case 1: // x < 0 and y > 0
-            result = p*(x-y) + y + safe_log((1-p)/q);
-            if (result < -1e-6) {out << p*(x-y) << ", " << safe_log(1-p) - safe_log(q) + y << " Negative Value - 1.\n"; }
-            break;
-         case 2: // x > 0 and y < 0
-            result = p*(x-y) - x + safe_log(p/(1-q));
-            if (result < -1e-6) {out << p*(x-y) << ", " << safe_log(p) - x - safe_log(1-q) << " Negative Value - 2.\n"; }
-            break;
-         case 3: // x > 0 and y > 0
-            result = (p-1)*(x-y) + safe_log(p/q);
-            if (result < -1e-06) {out << (p-1)*(x-y) << ", " << safe_log(p/q) << " Negative Value - 3.\n"; }
-            break;
-         default: // Just to compiler stop complaining...
-            result = 0.0;
-            break;
-      }
-      return std::max(result, 0.0);
+      // fliped_x = 1-x
+      const double p = sigmoid(x); const double one_p = sigmoid(-x);
+      const double q = sigmoid(y); const double one_q = sigmoid(-y);
+      if ((p < q && x > y) || (p > q && x < y))
+      { std::cout << "Sigmoid is not monotone." << std::endl; }
+      if (p == q) { return 0.0; }
+      const double result1 = safe_log(one_p/one_q) + p*(x-y);
+      const double result2 = safe_log(p/q) - one_p*(x-y);
+
+      return std::max((result1 + result2)*0.5, 0.0);
    });
    // Since Bregman divergence is always positive, ||Dh||_L¹=∫_Ω Dh.
    return zero_gf->ComputeL1Error(Dh);

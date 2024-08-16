@@ -99,7 +99,7 @@ int main(int argc, char *argv[])
    double tol_stationarity = 1e-03;
    double tol_compliance = 5e-05;
    bool use_bregman = true;
-   bool restart = true;
+   bool restart = false;
    bool armijo = true;
    bool use_GBB = true;
    ostringstream filename_prefix;
@@ -131,7 +131,7 @@ int main(int argc, char *argv[])
                   "Enable or disable GLVis visualization.");
    args.AddOption(&use_bregman, "-bregman", "--use-bregman", "-L2", "--use-L2",
                   "Use Bregman divergence as a stopping criteria");
-   args.AddOption(&restart, "-init", "--restart", "-no-init", "--no-init-cond",
+   args.AddOption(&restart, "-re", "--restart", "-no-init", "--no-init-cond",
                   "Restart from a saved gridfunction");
    args.AddOption(&armijo, "-armijo", "--use-armijo", "-pos-bregman",
                   "--positive-bregman-condition",
@@ -149,6 +149,7 @@ int main(int argc, char *argv[])
          args.PrintUsage(mfem::out);
       }
    }
+   if (Mpi::Root()) { args.PrintOptions(out); }
 
    std::unique_ptr<Mesh> mesh;
    Array2D<int> ess_bdr;
@@ -336,10 +337,10 @@ int main(int argc, char *argv[])
          sout_u << "parallel " << num_procs << " " << myid << "\n";
          sout_u.precision(8);
          sout_u << "solution\n"
-                   << *pmesh << u
-                   << "window_title 'displacement - PMD " << problem << "'\n"
-                   << "keys Rjl***************\n"
-                   << flush;
+                << *pmesh << u
+                << "window_title 'displacement - PMD " << problem << "'\n"
+                << "keys Rjl***************\n"
+                << flush;
          MPI_Barrier(MPI_COMM_WORLD); // try to prevent streams from mixing
       }
    }

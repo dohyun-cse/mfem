@@ -10,8 +10,7 @@ namespace mfem
 
 inline double safe_log(const double x)
 {
-  return x < 1e-300 ? -700.0 : std::log(x);
-
+  return x < 1e-300 ? -300*std::log(10) : std::log(x);
 }
 
 /// @brief Inverse sigmoid function
