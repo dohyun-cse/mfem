@@ -355,8 +355,8 @@ void Torsion3PreRefine(double &filter_radius, double &vol_fraction,
                        std::unique_ptr<Mesh> &mesh, Array2D<int> &ess_bdr, Array<int> &ess_bdr_filter,
                        std::unique_ptr<VectorCoefficient> &vforce_cf)
 {
-   if (filter_radius < 0) { filter_radius = 0.005; }
-   if (vol_fraction < 0) { vol_fraction = 0.005; }
+   if (filter_radius < 0) { filter_radius = 0.03; }
+   if (vol_fraction < 0) { vol_fraction = 0.1; }
 
    // [1: bottom, 2: front, 3: right, 4: back, 5: left, 6: top]
    *mesh = Mesh::MakeCartesian3D(5, 6, 6, mfem::Element::Type::HEXAHEDRON,

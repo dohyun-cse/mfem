@@ -10,19 +10,26 @@ namespace mfem
 
 inline double safe_log(const double x)
 {
-  return x < 1e-300 ? -300*std::log(10) : std::log(x);
+   return x < 1e-300 ? -300*std::log(10) : std::log(x);
 }
 
 /// @brief Inverse sigmoid function
 inline double inv_sigmoid(const double x)
 {
-  return x < 0.5 ? safe_log(x / (1.0 - x)) : -safe_log((1.0 - x) / x);
+   return x < 0.5 ? safe_log(x / (1.0 - x)) : -safe_log((1.0 - x) / x);
 }
 
 /// @brief Sigmoid function
 inline double sigmoid(const double x)
 {
    return x>=0.0 ? 1.0 / (1.0 + exp(-x)) : exp(x) / (1.0 + exp(x));
+}
+
+inline double safe_logsigmoid(const double x)
+{
+   if (std::fabs(x) < 5) { return std::log(sigmoid(x)); }
+   else if (x > 0) {return -std::log1p(std::exp(-x));}
+   else {return x-std::log1p(std::exp(x));};
 }
 
 /// @brief Derivative of sigmoid function
@@ -79,7 +86,7 @@ public:
       // Fermi-Dirac
       SetLegendre([](const double x)
       {
-        return x*safe_log(x) + (1.0 - x)*safe_log(1.0 - x);
+         return x*safe_log(x) + (1.0 - x)*safe_log(1.0 - x);
       });
       // Derivative, logit = log(x/(1-x))
       SetForwardMap(inv_sigmoid);
@@ -494,7 +501,8 @@ public:
    double StationarityError(const GridFunction &grad, bool useL2norm,
                             const double eps=1e-04);
    double StationarityErrorL2(GridFunction &grad, const double eps=1e-04);
-   virtual double ComputeBregmanDivergence(const GridFunction &p, const GridFunction &q);
+   virtual double ComputeBregmanDivergence(const GridFunction &p,
+                                           const GridFunction &q);
    double ComputeVolume() override
    {
       current_volume = zero_gf->ComputeL1Error(*rho_cf);
@@ -527,15 +535,17 @@ private:
 
 class FermiDiracDesignDensity : public LatentDesignDensity
 {
-  public:
+public:
    FermiDiracDesignDensity(FiniteElementSpace &fes,
-                       DensityFilter &filter, double vol_frac,
-                       std::function<double(double)> h,
-                       std::function<double(double)> primal2dual,
-                       std::function<double(double)> dual2primal,
-                       bool clip_lower=false, bool clip_upper=false):
-     LatentDesignDensity(fes, filter, vol_frac, h, primal2dual, dual2primal, clip_lower, clip_upper){};
-   double ComputeBregmanDivergence(const GridFunction &p, const GridFunction &q) override;
+                           DensityFilter &filter, double vol_frac,
+                           std::function<double(double)> h,
+                           std::function<double(double)> primal2dual,
+                           std::function<double(double)> dual2primal,
+                           bool clip_lower=false, bool clip_upper=false):
+      LatentDesignDensity(fes, filter, vol_frac, h, primal2dual, dual2primal,
+                          clip_lower, clip_upper) {};
+   double ComputeBregmanDivergence(const GridFunction &p,
+                                   const GridFunction &q) override;
 };
 
 class PrimalDesignDensity : public DesignDensity

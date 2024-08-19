@@ -642,15 +642,30 @@ double FermiDiracDesignDensity::ComputeBregmanDivergence(const GridFunction &p,
    MappedPairGridFunctionCoeffitient Dh(&p, &q, [this](double x, double y)
    {
       // fliped_x = 1-x
-      const double p = sigmoid(x); const double one_p = sigmoid(-x);
-      const double q = sigmoid(y); const double one_q = sigmoid(-y);
-      if ((p < q && x > y) || (p > q && x < y))
-      { std::cout << "Sigmoid is not monotone." << std::endl; }
-      if (p == q) { return 0.0; }
-      const double result1 = safe_log(one_p/one_q) + p*(x-y);
-      const double result2 = safe_log(p/q) - one_p*(x-y);
+      const double p = sigmoid(x);
+      const double pm1 = -sigmoid(-x);
+      const double log_p = safe_logsigmoid(x);
+      const double log_1mp = safe_logsigmoid(-x);
 
-      return std::max((result1 + result2)*0.5, 0.0);
+      const double q = sigmoid(y);
+      const double log_q = safe_logsigmoid(y);
+      const double log_1mq = safe_logsigmoid(-y);
+
+      const double result1 = (log_1mp-log_1mq) + p*(x-y);
+      const double result2 = (log_p-log_q) + pm1*(x-y);
+      auto print_sign = [](const double x) {return x < 0 ? '-' : '+'; };
+      auto print_ineq = [](const double x, const double y) {return x < y ? '<' : '>'; };
+      if (result1 < 0 || result2 < 0)
+      {
+         mfem::out
+               << print_sign(x) << print_ineq(x, y) << print_sign(y)
+               << print_sign(result1) << print_sign( result2)
+               << ": " << p << ", " << q << ", " << result1 << ", " << result2 << std::endl;
+         // if (result1 < 0 && result2 < 0) {mfem::out << "Both Failed" << std::endl;}
+         // if (x > y && result2 < 0) { mfem::out << ">+-, Assertion failed." << std::endl; }
+         // if (x < y && result1 < 0) { mfem::out << "<-+, Assertion failed." << std::endl; }
+      }
+      return result2;
    });
    // Since Bregman divergence is always positive, ||Dh||_L¹=∫_Ω Dh.
    return zero_gf->ComputeL1Error(Dh);
