@@ -636,6 +636,7 @@ double LatentDesignDensity::ComputeBregmanDivergence(const GridFunction &p,
    // Since Bregman divergence is always positive, ||Dh||_L¹=∫_Ω Dh.
    return zero_gf->ComputeL1Error(Dh);
 }
+
 double FermiDiracDesignDensity::ComputeBregmanDivergence(const GridFunction &p,
                                                          const GridFunction &q)
 {
@@ -657,15 +658,15 @@ double FermiDiracDesignDensity::ComputeBregmanDivergence(const GridFunction &p,
       auto print_ineq = [](const double x, const double y) {return x < y ? '<' : '>'; };
       if (result1 < 0 || result2 < 0)
       {
-         mfem::out
-               << print_sign(x) << print_ineq(x, y) << print_sign(y)
-               << print_sign(result1) << print_sign( result2)
-               << ": " << p << ", " << q << ", " << result1 << ", " << result2 << std::endl;
+         // mfem::out
+         //       << print_sign(x) << print_ineq(x, y) << print_sign(y)
+         //       << print_sign(result1) << print_sign( result2)
+         //       << ": " << p << ", " << q << ", " << result1 << ", " << result2 << std::endl;
          // if (result1 < 0 && result2 < 0) {mfem::out << "Both Failed" << std::endl;}
          // if (x > y && result2 < 0) { mfem::out << ">+-, Assertion failed." << std::endl; }
          // if (x < y && result1 < 0) { mfem::out << "<-+, Assertion failed." << std::endl; }
       }
-      return result2;
+      return std::max(std::max(result1, result2), 0.0);
    });
    // Since Bregman divergence is always positive, ||Dh||_L¹=∫_Ω Dh.
    return zero_gf->ComputeL1Error(Dh);
