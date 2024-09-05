@@ -279,7 +279,7 @@ void BridgePreRefine(double &filter_radius, double &vol_fraction,
                                                        Vector &f)
    {
       f = 0.0;
-      if (x[1] > 0.8) { f(1) = -70.0; }
+      if (x[1] > 1.0 - std::pow(2.0,-5.0)) { f(1) = -70.0; }
    }));
 }
 void BridgePostRefine(int ser_ref_levels, int par_ref_levels,
@@ -359,16 +359,17 @@ void Torsion3PreRefine(double &filter_radius, double &vol_fraction,
    if (vol_fraction < 0) { vol_fraction = 0.1; }
 
    // [1: bottom, 2: front, 3: right, 4: back, 5: left, 6: top]
-   enum BDRY3D {BOTTOM=0, FRONT, RIGHT, BACK, LEFT, TOP, NRBDRY};
+   // enum BDRY3D {BOTTOM=0, FRONT, RIGHT, BACK, LEFT, TOP, NRBDRY};
+   enum BDRY3D { ZL=0, YL=1, XR=2, YR=3, XL=4, ZR=5, NRBDRY };
    *mesh = Mesh::MakeCartesian3D(5, 12, 12, mfem::Element::Type::HEXAHEDRON,
                                  .5, 1.2, 1.2);
    ess_bdr.SetSize(4, BDRY3D::NRBDRY);
    ess_bdr_filter.SetSize(BDRY3D::NRBDRY);
    ess_bdr = 0;
-   ess_bdr(0, BDRY3D::RIGHT) = 1; // left surface is clamped
+   ess_bdr(0, BDRY3D::XR) = 1; // right surface is clamped
    ess_bdr_filter = -1; // all boundaries void
-   ess_bdr_filter[BDRY3D::LEFT] = 0; // left surface is free
-   ess_bdr_filter[BDRY3D::RIGHT] = 0; // right surface is free
+   ess_bdr_filter[BDRY3D::XL] = 0; // left surface is free
+   ess_bdr_filter[BDRY3D::XR] = 0; // right surface is free
    const Vector center({0.0, 0.6, 0.6});
    vforce_cf.reset(new VectorFunctionCoefficient(3, [center](const Vector &x,
                                                              Vector &f)
@@ -470,16 +471,7 @@ void SelfLoading3PreRefine(double &filter_radius, double &vol_fraction,
    //  5: left,
    //  6: top
    //  7: (2,2,0)]
-   enum BDRY3D
-   {
-      ZL=0,
-      YL=1,
-      XR=2,
-      YR=3,
-      XL=4,
-      ZR=5,
-      CORNER=6
-   };
+   enum BDRY3D { ZL=0, YL=1, XR=2, YR=3, XL=4, ZR=5, CORNER=6 };
    *mesh = Mesh::MakeCartesian3D(50, 50, 50, mfem::Element::Type::HEXAHEDRON,
                                  1.0, 1.0, 1.0, false);
    ess_bdr.SetSize(4, 7);
