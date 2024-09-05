@@ -365,7 +365,7 @@ void Torsion3PreRefine(double &filter_radius, double &vol_fraction,
    ess_bdr.SetSize(4, BDRY3D::NRBDRY);
    ess_bdr_filter.SetSize(BDRY3D::NRBDRY);
    ess_bdr = 0;
-   ess_bdr(0, BDRY3D::LEFT) = 1; // left surface is clamped
+   ess_bdr(0, BDRY3D::RIGHT) = 1; // left surface is clamped
    ess_bdr_filter = -1; // all boundaries void
    ess_bdr_filter[BDRY3D::LEFT] = 0; // left surface is free
    ess_bdr_filter[BDRY3D::RIGHT] = 0; // right surface is free
@@ -388,6 +388,7 @@ void Torsion3PreRefine(double &filter_radius, double &vol_fraction,
       }
    }));
 }
+
 void Torsion3PostRefine(int ser_ref_levels, int par_ref_levels,
                         std::unique_ptr<Mesh> &mesh)
 {
@@ -469,18 +470,28 @@ void SelfLoading3PreRefine(double &filter_radius, double &vol_fraction,
    //  5: left,
    //  6: top
    //  7: (2,2,0)]
+   enum BDRY3D
+   {
+      ZL=0,
+      YL=1,
+      XR=2,
+      YR=3,
+      XL=4,
+      ZR=5,
+      CORNER=6
+   };
    *mesh = Mesh::MakeCartesian3D(50, 50, 50, mfem::Element::Type::HEXAHEDRON,
                                  1.0, 1.0, 1.0, false);
    ess_bdr.SetSize(4, 7);
    ess_bdr_filter.SetSize(7);
    ess_bdr = 0;
-   ess_bdr(2, 2 - 1) = 1;// front - xz-roller plane
-   ess_bdr(1, 5 - 1) = 1;// left - yz-roller plane
-   ess_bdr(0, 7 - 1) = 1;// corner - pin
+   ess_bdr(0, BDRY3D::CORNER) = 1;// corner - pin
+   ess_bdr(1, BDRY3D::XR) = 1;// left - yz-roller plane
+   ess_bdr(2, BDRY3D::YR) = 1;// front - xz-roller plane
    ess_bdr_filter = 0;
-   ess_bdr_filter[3 - 1] = -1;
-   ess_bdr_filter[4 - 1] = -1;
-   ess_bdr_filter[6 - 1] = -1;
+   ess_bdr_filter[BDRY3D::ZL] = -1;
+   ess_bdr_filter[BDRY3D::YL] = -1;
+   ess_bdr_filter[BDRY3D::XL] = -1;
 
    const Vector zero({0.0, 0.0, 0.0});
    vforce_cf.reset(new VectorConstantCoefficient(zero));
@@ -490,7 +501,7 @@ void SelfLoading3PostRefine(int ser_ref_levels, int par_ref_levels,
 {
    // left center: Dirichlet
    // const double lv = ser_ref_levels + std::max((double)par_ref_levels, 0.0);
-   mesh->MarkBoundary([](const Vector &x) { return (x[0] > 1.0 - 0.02) && (x[1] > 1.0 - 0.02) && (x[2] < 1e-10); },
+   mesh->MarkBoundary([](const Vector &x) { return (x[0] < 0.02) && (x[1] < 0.02) && (x[2] < 1e-10); },
    7);
    mesh->SetAttributes();
 }
