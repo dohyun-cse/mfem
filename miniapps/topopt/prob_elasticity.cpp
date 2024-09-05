@@ -279,7 +279,7 @@ void BridgePreRefine(double &filter_radius, double &vol_fraction,
                                                        Vector &f)
    {
       f = 0.0;
-      if (x[1] > 1.0 - std::pow(2, -5.0)) { f(1) = -30.0; }
+      if (x[1] > 0.8) { f(1) = -70.0; }
    }));
 }
 void BridgePostRefine(int ser_ref_levels, int par_ref_levels,
