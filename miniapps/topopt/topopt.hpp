@@ -7,6 +7,7 @@
 
 namespace mfem
 {
+inline double dexp(const double x) {return std::exp(x);}
 
 inline double safe_log(const double x)
 {
@@ -60,7 +61,8 @@ inline double der2_simp(const double x, const double rho_0,
    return k * (k - 1.0) * std::pow(x, k - 2.0) * (rho_max - rho_0);
 }
 
-void ProjectCoefficient_attr(GridFunction &gf, Coefficient &coeff, int attribute);
+void ProjectCoefficient_attr(GridFunction &gf, Coefficient &coeff,
+                             int attribute);
 
 class LegendreFunction
 {
@@ -112,7 +114,7 @@ public:
       // Derivative, safe log(x)
       SetForwardMap(safe_log);
       // Inverse of Derivative, exp
-      SetInverseMap(exp<double>);
+      SetInverseMap(dexp);
    }
 };
 
@@ -486,7 +488,8 @@ private:
    std::function<double(double)> d2p;
    bool clip_lower, clip_upper;
    bool use_primal_filter;
-   std::unique_ptr<Coefficient> post_project_clip; // if there are passive elements, project using this.
+   std::unique_ptr<Coefficient>
+   post_project_clip; // if there are passive elements, project using this.
    // functions
 public:
    LatentDesignDensity(FiniteElementSpace &fes,
@@ -495,7 +498,7 @@ public:
                        std::function<double(double)> primal2dual,
                        std::function<double(double)> dual2primal,
                        bool clip_lower=false, bool clip_upper=false);
-   void SetPostProjectClip(Coefficient *cf){post_project_clip.reset(cf);}
+   void SetPostProjectClip(Coefficient *cf) {post_project_clip.reset(cf);}
    double Project() override;
    double StationarityError(const GridFunction &grad,
                             const double eps=1e-04) override
