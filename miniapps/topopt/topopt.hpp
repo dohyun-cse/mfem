@@ -7,7 +7,7 @@
 
 namespace mfem
 {
-inline double dexp(const double x) {return std::exp(x);}
+inline double double_exp(const double x) {return std::exp(x);}
 
 inline double safe_log(const double x)
 {
@@ -114,7 +114,7 @@ public:
       // Derivative, safe log(x)
       SetForwardMap(safe_log);
       // Inverse of Derivative, exp
-      SetInverseMap(dexp);
+      SetInverseMap(double_exp);
    }
 };
 
