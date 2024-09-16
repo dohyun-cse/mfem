@@ -4,6 +4,33 @@
 
 namespace mfem
 {
+void ProjectCoefficient_attr(GridFunction &gf, Coefficient &coeff, int attribute)
+{
+   int i;
+   Array<int> dofs;
+   Vector vals;
+
+   DofTransformation * doftrans = NULL;
+
+   FiniteElementSpace *fes = gf.FESpace();
+   for (i = 0; i < fes->GetNE(); i++)
+   {
+      if (fes->GetAttribute(i) != attribute)
+      {
+         continue;
+      }
+
+      doftrans = fes->GetElementDofs(i, dofs);
+      vals.SetSize(dofs.Size());
+      fes->GetFE(i)->Project(coeff, *fes->GetElementTransformation(i), vals);
+      if (doftrans)
+      {
+         doftrans->TransformPrimal(vals);
+      }
+      gf.SetSubVector(dofs, vals);
+   }
+}
+
 EllipticSolver::EllipticSolver(BilinearForm &a, LinearForm &b,
                                Array<int> &ess_bdr_list):
    a(a), b(b), ess_bdr(1, ess_bdr_list.Size()), ess_tdof_list(0), symmetric(false),
@@ -589,6 +616,12 @@ double LatentDesignDensity::Project()
          if (std::fabs(current_volume - target_volume) < vol_tol) { break; }
          *x_gf += current_volume < target_volume ? dc : -dc;
          c += current_volume < target_volume ? dc : -dc;
+         if (x_gf->FESpace()->GetMesh()->attributes.Max()>1) {
+            ConstantCoefficient psi_max(100);
+            ProjectCoefficient_attr(*x_gf, psi_max, 2);
+            ConstantCoefficient psi_min(-100);
+            ProjectCoefficient_attr(*x_gf, psi_min, 3);
+         }
       }
       if (clip_lower || clip_upper)
       {
@@ -898,6 +931,11 @@ void TopOptProblem::UpdateGradient()
       L2projector->SetGridFunction(*gradF_filter);
       filter_to_density->Assemble();
    }
+         if (gradF->FESpace()->GetMesh()->attributes.Max()>1) {
+      ConstantCoefficient zero_cf(0.0);
+            ProjectCoefficient_attr(*gradF, zero_cf, 2);
+            ProjectCoefficient_attr(*gradF, zero_cf, 3);
+         }
 }
 
 double StrainEnergyDensityCoefficient::Eval(ElementTransformation &T,

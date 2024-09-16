@@ -120,6 +120,8 @@ int main(int argc, char *argv[])
                   "Length scale for ρ.");
    args.AddOption(&max_it, "-mi", "--max-it",
                   "Maximum number of gradient descent iterations.");
+   args.AddOption(&exponent, "-simp-exp", "--simp-exponent",
+                  "SIMP exponent, p");
    args.AddOption(&vol_fraction, "-vf", "--volume-fraction",
                   "Volume fraction for the material density.");
    args.AddOption(&E, "-E", "--E", "Lamé constant λ.");
@@ -352,6 +354,7 @@ int main(int argc, char *argv[])
          rho_gf.reset(new ParGridFunction(psi));
          rho_gf->ProjectCoefficient(density.GetDensityCoefficient());
       }
+      optprob.Eval();
       pd.reset(new ParaViewDataCollection(filename_prefix.str(), pmesh.get()));
       pd->SetPrefixPath("ParaView");
       pd->RegisterField("state", &u);
@@ -441,6 +444,9 @@ int main(int argc, char *argv[])
    logger.Append(std::string("KKT"), KKT);
    logger.SaveWhenPrint(filename_prefix.str());
    logger.Print();
+   // LinearForm int_grad(&control_fes);
+   // GridFunctionCoefficient grad_cf(&grad);
+   // int_grad.AddDomainIntegrator(new DomainLFIntegrator(grad_cf));
 
    bool converged = false;
    ConstantCoefficient zero_cf(0.0);
@@ -449,6 +455,11 @@ int main(int argc, char *argv[])
    mass.Assemble();
    for (int k = 0; k < max_it; k++)
    {
+      if (pmesh->attributes.Max()>1)
+      {
+        ConstantCoefficient psi_max(100);
+         ProjectCoefficient_attr(psi, psi_max, 2);
+      }
       // Step 1. Compute Step size
       if (use_GBB)
       {
@@ -483,8 +494,13 @@ int main(int argc, char *argv[])
       else
       {
          num_reeval =
-            Step_Bregman(optprob, old_psi, grad, diff_rho_form, step_size, 1000000);
+            Step_Bregman(optprob, old_psi, grad, diff_rho_form, step_size);
       }
+      // int_grad.Assemble();
+      // double int_grad_val = int_grad.Sum();
+      // MPI_Allreduce(MPI_IN_PLACE, &int_grad_val, 1, MPI_DOUBLE, MPI_SUM,
+      //               MPI_COMM_WORLD);
+      // if (Mpi::Root()) { out << int_grad_val-optprob.GetVolLagrange()/step_size*density.GetDomainVolume() << std::endl; }
       compliance = optprob.GetValue();
       volume = density.GetVolume() / density.GetDomainVolume();
       optprob.UpdateGradient();

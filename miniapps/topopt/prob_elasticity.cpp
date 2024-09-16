@@ -279,7 +279,7 @@ void BridgePreRefine(double &filter_radius, double &vol_fraction,
                                                        Vector &f)
    {
       f = 0.0;
-      if (x[1] > 1.0 - std::pow(2.0,-5.0)) { f(1) = -70.0; }
+      if (x[1] > 1.0 - std::pow(2, -5)) { f(1) = -80.0; }
    }));
 }
 void BridgePostRefine(int ser_ref_levels, int par_ref_levels,
@@ -291,6 +291,12 @@ void BridgePostRefine(int ser_ref_levels, int par_ref_levels,
    5);
    mesh->MarkBoundary([h](const Vector &x) {return ((x(0) < 1e-10) && (x(1) < 0.8)); },
    6);
+   Vector center(2);
+   for (int i=0; i<mesh->GetNE(); i++)
+   {
+      mesh->GetElementCenter(i, center);
+      if (center(1)>1.0 - std::pow(2, -5)) {mesh->SetAttribute(i, 2);}
+   }
    mesh->SetAttributes();
 }
 
@@ -321,31 +327,29 @@ void Cantilever3PreRefine(double &filter_radius, double &vol_fraction,
                           std::unique_ptr<Mesh> &mesh, Array2D<int> &ess_bdr, Array<int> &ess_bdr_filter,
                           std::unique_ptr<VectorCoefficient> &vforce_cf)
 {
-   if (filter_radius < 0) { filter_radius = 1e-02; }
+   if (filter_radius < 0) { filter_radius = 0.05; }
    if (vol_fraction < 0) { vol_fraction = 0.12; }
-   // 1: bottom,
-   // 2: front,
-   // 3: right,
-   // 4: back,
-   // 5: left,
-   // 6: top
+   enum BDRY3D { ZL=0, YL=1, XR=2, YR=3, XL=4, ZR=5, NRBDRY };
    *mesh = Mesh::MakeCartesian3D(2, 1, 1, mfem::Element::Type::HEXAHEDRON, 2.0,
                                  1.0,
                                  1.0);
    ess_bdr.SetSize(4, 6);
    ess_bdr_filter.SetSize(6);
    ess_bdr = 0; ess_bdr_filter = 0;
-   ess_bdr(0, 4) = 1;
-   ess_bdr_filter[0] = -1;
-   ess_bdr_filter[5] = -1;
+   ess_bdr(0, BDRY3D::XL) = 1;
+   ess_bdr_filter = -1;
+   ess_bdr_filter[BDRY3D::XL] = 0;
 
-   const Vector center({1.9, 0.5, 0.5});
+   const Vector center({1.9, 0.0, 0.1});
    // force(0) = 0.0; force(1) = 0.0; force(2) = -1.0;
    vforce_cf.reset(new VectorFunctionCoefficient(3, [center](const Vector &x,
                                                              Vector &f)
    {
       f = 0.0;
-      if (x.DistanceTo(center) < 0.05) { f(2) = -1.0; }
+      if (x[0] > center[0] && x[2] < center[2])
+      {
+         f(2) = -10.0;
+      }
    }));
 }
 void Cantilever3PostRefine(int ser_ref_levels, int par_ref_levels,
@@ -374,18 +378,16 @@ void Torsion3PreRefine(double &filter_radius, double &vol_fraction,
    vforce_cf.reset(new VectorFunctionCoefficient(3, [center](const Vector &x,
                                                              Vector &f)
    {
-      if (x[0] < 0.05)
+      f = 0.0;
+      if (x[0] < 0.1)
       {
-         if ((x[1]-center[1])*(x[1]-center[1])+(x[2]-center[2])*(x[2]-center[2]) < 0.04)
+         if ((x[1]-center[1])*(x[1]-center[1])+(x[2]-center[2])*(x[2]-center[2]) <
+             std::pow(0.3,2))
          {
             f[0] = 0.0;
-            f[1] = -(x[2]-0.6);
-            f[2] = (x[1]-0.6);
+            f[1] = -50*(x[2]-0.6);
+            f[2] = 50*(x[1]-0.6);
          }
-      }
-      else
-      {
-         f = 0.0;
       }
    }));
 }
@@ -533,8 +535,9 @@ void ForceInverterPreRefine(double &filter_radius, double &vol_fraction,
    // ess_bdr_filter[5] = 1; ess_bdr_filter[6] = 1; ess_bdr_filter[7] = 1;
 
 
-   k_in = 10.0; k_out = 10.0;
+   k_in = 1.0; k_out = 1e-03;
    Vector traction(2); traction[0] = 10.0; traction[1] = 0.0;
+   // rescale it to int_bdry = 1.
    t_in.reset(new VectorConstantCoefficient(traction));
    d_out.SetSize(2); d_out[0] = -1.0; d_out[1] = 0.0;
    d_in.SetSize(2); d_in[0] = -1.0; d_in[1] = 0.0;
