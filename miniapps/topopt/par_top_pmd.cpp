@@ -283,6 +283,91 @@ int main(int argc, char *argv[])
       density.SetVolumeConstraintType(-1);
       density.GetGridFunction() = inv_sigmoid(0.8);
    }
+   double KKT0 = -infinity();
+   Array<int> material_bdr(ess_bdr_filter);
+   for (auto &val : material_bdr)
+   {
+      val = val == 1;
+   }
+
+   // 11. Iterate
+   ParGridFunction old_grad(&control_fes), old_psi(&control_fes);
+
+   ParLinearForm diff_rho_form(&control_fes);
+   std::unique_ptr<Coefficient> diff_rho(optprob.GetDensityDiffCoeff(old_psi));
+   diff_rho_form.AddDomainIntegrator(new DomainLFIntegrator(*diff_rho));
+
+   ParLinearForm der_sig_form(&control_fes);
+   MappedGridFunctionCoefficient der_sig(&psi, [](double x)
+   {
+      const double rho = sigmoid(x);
+      return rho * (1 - rho);
+   });
+   der_sig_form.AddDomainIntegrator(new DomainLFIntegrator(der_sig));
+   ParGridFunction one_gf(&control_fes);
+   one_gf = 1.0;
+   ParGridFunction tmp_rho_gf(&control_fes);
+
+   if (restart)
+   {
+      ostringstream solfile;
+      solfile << filename_prefix.str() << "-" << seq_ref_levels << "-"
+              << par_ref_levels << "-0." << setfill('0') << setw(6) << myid;
+      std::ifstream in;
+      in.open(solfile.str().c_str(), std::ios::in);
+      if (in.good())
+      {
+
+         mfem::ParGridFunction ndes(pmesh.get(), in);
+         in.close();
+         psi.ProjectGridFunction(ndes);
+
+
+      }
+   }
+
+   if (Mpi::Root())
+      mfem::out << "\n"
+                << "Initialization Done." << "\n"
+                << "Start Projected Mirror Descent Step." << "\n"
+                << std::endl;
+
+   if (pmesh->attributes.Max()>1)
+   {
+      ConstantCoefficient psi_val(0);
+      psi_val.constant = 100;
+      ProjectCoefficient_attr(psi, psi_val, 2);
+      psi_val.constant = -100;
+      ProjectCoefficient_attr(psi, psi_val, 3);
+   }
+   double compliance = optprob.Eval();
+   optprob.UpdateGradient();
+   if (problem <= ElasticityProblem::MBB_selfloading)
+   {
+      filter.Apply(*ug, *gradH1_selfload);
+      projected_grad_selfload->Assemble();
+      grad.Add(2.0, *projected_grad_selfload);
+   }
+   double step_size(1.0),
+          volume(density.GetVolume() / density.GetDomainVolume()),
+          stationarityError(density.StationarityErrorL2(grad)),
+          stationarityError_bregman(density.StationarityError(grad));
+   int num_reeval(0);
+   double old_compliance;
+   double stationarityError0(stationarityError),
+          stationarityError_bregman0(stationarityError_bregman);
+   double relative_stationarity(1.0), relative_stationarity_bregman(1.0);
+   double KKT(0.0);
+   TableLogger logger;
+   logger.Append(std::string("Volume"), volume);
+   logger.Append(std::string("Compliance"), compliance);
+   logger.Append(std::string("Stationarity"), stationarityError);
+   logger.Append(std::string("Re-evel"), num_reeval);
+   logger.Append(std::string("Step Size"), step_size);
+   logger.Append(std::string("Stationarity-Bregman"), stationarityError_bregman);
+   logger.Append(std::string("KKT"), KKT);
+   logger.SaveWhenPrint(filename_prefix.str());
+   logger.Print();
    // 10. Connect to GLVis. Prepare for VisIt output.
    char vishost[] = "localhost";
    int visport = 19916;
@@ -354,7 +439,6 @@ int main(int argc, char *argv[])
          rho_gf.reset(new ParGridFunction(psi));
          rho_gf->ProjectCoefficient(density.GetDensityCoefficient());
       }
-      optprob.Eval();
       pd.reset(new ParaViewDataCollection(filename_prefix.str(), pmesh.get()));
       pd->SetPrefixPath("ParaView");
       pd->RegisterField("state", &u);
@@ -367,83 +451,6 @@ int main(int argc, char *argv[])
       pd->SetTime(0);
       pd->Save();
    }
-   double KKT0 = -infinity();
-   Array<int> material_bdr(ess_bdr_filter);
-   for (auto &val : material_bdr)
-   {
-      val = val == 1;
-   }
-
-   // 11. Iterate
-   ParGridFunction old_grad(&control_fes), old_psi(&control_fes);
-
-   ParLinearForm diff_rho_form(&control_fes);
-   std::unique_ptr<Coefficient> diff_rho(optprob.GetDensityDiffCoeff(old_psi));
-   diff_rho_form.AddDomainIntegrator(new DomainLFIntegrator(*diff_rho));
-
-   ParLinearForm der_sig_form(&control_fes);
-   MappedGridFunctionCoefficient der_sig(&psi, [](double x)
-   {
-      const double rho = sigmoid(x);
-      return rho * (1 - rho);
-   });
-   der_sig_form.AddDomainIntegrator(new DomainLFIntegrator(der_sig));
-   ParGridFunction one_gf(&control_fes);
-   one_gf = 1.0;
-   ParGridFunction tmp_rho_gf(&control_fes);
-
-   if (restart)
-   {
-      ostringstream solfile;
-      solfile << filename_prefix.str() << "-" << seq_ref_levels << "-"
-              << par_ref_levels << "-0." << setfill('0') << setw(6) << myid;
-      std::ifstream in;
-      in.open(solfile.str().c_str(), std::ios::in);
-      if (in.good())
-      {
-
-         mfem::ParGridFunction ndes(pmesh.get(), in);
-         in.close();
-         psi.ProjectGridFunction(ndes);
-
-
-      }
-   }
-
-   if (Mpi::Root())
-      mfem::out << "\n"
-                << "Initialization Done." << "\n"
-                << "Start Projected Mirror Descent Step." << "\n"
-                << std::endl;
-
-   double compliance = optprob.Eval();
-   optprob.UpdateGradient();
-   if (problem <= ElasticityProblem::MBB_selfloading)
-   {
-      filter.Apply(*ug, *gradH1_selfload);
-      projected_grad_selfload->Assemble();
-      grad.Add(2.0, *projected_grad_selfload);
-   }
-   double step_size(1.0),
-          volume(density.GetVolume() / density.GetDomainVolume()),
-          stationarityError(density.StationarityErrorL2(grad)),
-          stationarityError_bregman(density.StationarityError(grad));
-   int num_reeval(0);
-   double old_compliance;
-   double stationarityError0(stationarityError),
-          stationarityError_bregman0(stationarityError_bregman);
-   double relative_stationarity(1.0), relative_stationarity_bregman(1.0);
-   double KKT(0.0);
-   TableLogger logger;
-   logger.Append(std::string("Volume"), volume);
-   logger.Append(std::string("Compliance"), compliance);
-   logger.Append(std::string("Stationarity"), stationarityError);
-   logger.Append(std::string("Re-evel"), num_reeval);
-   logger.Append(std::string("Step Size"), step_size);
-   logger.Append(std::string("Stationarity-Bregman"), stationarityError_bregman);
-   logger.Append(std::string("KKT"), KKT);
-   logger.SaveWhenPrint(filename_prefix.str());
-   logger.Print();
    // LinearForm int_grad(&control_fes);
    // GridFunctionCoefficient grad_cf(&grad);
    // int_grad.AddDomainIntegrator(new DomainLFIntegrator(grad_cf));
@@ -457,8 +464,11 @@ int main(int argc, char *argv[])
    {
       if (pmesh->attributes.Max()>1)
       {
-        ConstantCoefficient psi_max(100);
-         ProjectCoefficient_attr(psi, psi_max, 2);
+         ConstantCoefficient psi_val(0);
+         psi_val.constant = 100;
+         ProjectCoefficient_attr(psi, psi_val, 2);
+         psi_val.constant = -100;
+         ProjectCoefficient_attr(psi, psi_val, 3);
       }
       // Step 1. Compute Step size
       if (use_GBB)
@@ -490,11 +500,13 @@ int main(int argc, char *argv[])
       {
          num_reeval =
             Step_Armijo(optprob, old_psi, grad, diff_rho_form, c1, step_size);
+            // Step_Armijo(optprob, old_psi, grad, diff_rho_form, c1, step_size, k==0?1:20);
       }
       else
       {
          num_reeval =
             Step_Bregman(optprob, old_psi, grad, diff_rho_form, step_size);
+            // Step_Bregman(optprob, old_psi, grad, diff_rho_form, step_size, k==0?1:20);
       }
       // int_grad.Assemble();
       // double int_grad_val = int_grad.Sum();

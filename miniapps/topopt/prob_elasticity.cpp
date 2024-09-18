@@ -189,7 +189,7 @@ void GetCompliantMechanismProblem(const CompliantMechanismProblem problem,
          prob_name = "ForceInverter";
          ForceInverterPreRefine(filter_radius, vol_fraction, mesh, ess_bdr,
                                 ess_bdr_filter,
-                                k_in, d_in, bdr_in, t_in, k_out, d_out, bdr_out);
+                                k_in, d_in, bdr_in, t_in, k_out, d_out, bdr_out, ref_levels, par_ref_levels);
          uniformRefine(mesh, ref_levels, par_ref_levels);
          ForceInverterPostRefine(ref_levels, par_ref_levels, mesh);
       } break;
@@ -273,7 +273,7 @@ void BridgePreRefine(double &filter_radius, double &vol_fraction,
    ess_bdr = 0; ess_bdr_filter = 0;
    ess_bdr(1, 3) = 1; // left : y-roller -> x fixed
    ess_bdr(0, 4) = 1; // right-bottom : pin support
-   ess_bdr_filter[2] = 1;
+   // ess_bdr_filter[2] = 1;
    ess_bdr_filter[5] = -1;
    vforce_cf.reset(new VectorFunctionCoefficient(2, [](const Vector &x,
                                                        Vector &f)
@@ -505,7 +505,8 @@ void ForceInverterPreRefine(double &filter_radius, double &vol_fraction,
                             std::unique_ptr<Mesh> &mesh, Array2D<int> &ess_bdr, Array<int> &ess_bdr_filter,
                             double &k_in, Vector &d_in, Array<int> &bdr_in,
                             std::unique_ptr<VectorCoefficient> &t_in,
-                            double &k_out, Vector &d_out, Array<int> &bdr_out)
+                            double &k_out, Vector &d_out, Array<int> &bdr_out,
+                            const int ref_levels, const int par_ref_levels)
 {
 
    if (filter_radius < 0) { filter_radius = 2.5e-02; }
@@ -536,7 +537,7 @@ void ForceInverterPreRefine(double &filter_radius, double &vol_fraction,
 
 
    k_in = 1.0; k_out = 1e-03;
-   Vector traction(2); traction[0] = 10.0; traction[1] = 0.0;
+   Vector traction(2); traction[0] = 1.0/std::pow(2,-(ref_levels+std::max(0.0,0.0 + par_ref_levels))); traction[1] = 0.0;
    // rescale it to int_bdry = 1.
    t_in.reset(new VectorConstantCoefficient(traction));
    d_out.SetSize(2); d_out[0] = -1.0; d_out[1] = 0.0;

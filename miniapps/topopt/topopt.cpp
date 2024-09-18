@@ -4,7 +4,8 @@
 
 namespace mfem
 {
-void ProjectCoefficient_attr(GridFunction &gf, Coefficient &coeff, int attribute)
+void ProjectCoefficient_attr(GridFunction &gf, Coefficient &coeff,
+                             int attribute)
 {
    int i;
    Array<int> dofs;
@@ -609,6 +610,7 @@ double LatentDesignDensity::Project()
       double c = 0.5 * (c_l + c_r);
       double dc = 0.5 * (c_r - c_l);
       *x_gf += c;
+      bool hasPassiveElements = x_gf->FESpace()->GetMesh()->attributes.Max()>1;
       while (dc > 1e-09)
       {
          dc *= 0.5;
@@ -616,11 +618,13 @@ double LatentDesignDensity::Project()
          if (std::fabs(current_volume - target_volume) < vol_tol) { break; }
          *x_gf += current_volume < target_volume ? dc : -dc;
          c += current_volume < target_volume ? dc : -dc;
-         if (x_gf->FESpace()->GetMesh()->attributes.Max()>1) {
-            ConstantCoefficient psi_max(100);
-            ProjectCoefficient_attr(*x_gf, psi_max, 2);
-            ConstantCoefficient psi_min(-100);
-            ProjectCoefficient_attr(*x_gf, psi_min, 3);
+         if (hasPassiveElements)
+         {
+            ConstantCoefficient psi_val(0);
+            psi_val.constant = 100;
+            ProjectCoefficient_attr(*x_gf, psi_val, 2);
+            psi_val.constant = -100;
+            ProjectCoefficient_attr(*x_gf, psi_val, 3);
          }
       }
       if (clip_lower || clip_upper)
@@ -931,11 +935,12 @@ void TopOptProblem::UpdateGradient()
       L2projector->SetGridFunction(*gradF_filter);
       filter_to_density->Assemble();
    }
-         if (gradF->FESpace()->GetMesh()->attributes.Max()>1) {
+   if (gradF->FESpace()->GetMesh()->attributes.Max()>1)
+   {
       ConstantCoefficient zero_cf(0.0);
-            ProjectCoefficient_attr(*gradF, zero_cf, 2);
-            ProjectCoefficient_attr(*gradF, zero_cf, 3);
-         }
+      ProjectCoefficient_attr(*gradF, zero_cf, 2);
+      ProjectCoefficient_attr(*gradF, zero_cf, 3);
+   }
 }
 
 double StrainEnergyDensityCoefficient::Eval(ElementTransformation &T,

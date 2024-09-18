@@ -108,7 +108,7 @@ void ForceInverterPreRefine(double &filter_radius, double &vol_fraction,
                             std::unique_ptr<Mesh> &mesh, Array2D<int> &ess_bdr, Array<int> &ess_bdr_filter,
                             double &k_in, Vector &d_in, Array<int> &bdr_in,
                             std::unique_ptr<VectorCoefficient> &t_in,
-                            double &k_out, Vector &d_out, Array<int> &bdr_out);
+                            double &k_out, Vector &d_out, Array<int> &bdr_out, const int ref_levels, const int par_ref_levels=-1);
 void ForceInverterPostRefine(int ser_ref_levels, int par_ref_levels,
                              std::unique_ptr<Mesh> &mesh);
 }
