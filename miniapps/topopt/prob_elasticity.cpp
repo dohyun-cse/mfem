@@ -18,8 +18,6 @@ void initialDesign(GridFunction& psi, Vector domain_center,
                    double target_volume, double domain_size, double lower, double upper,
                    bool toDensity)
 {
-   double weight = 0;
-   double current_volume = 0;
    FunctionCoefficient dist([&domain_center, &ports](const Vector &x)
    {
       double d = infinity();
@@ -32,7 +30,7 @@ void initialDesign(GridFunction& psi, Vector domain_center,
    ParMesh *pmesh = dynamic_cast<ParMesh*>(psi.FESpace()->GetMesh());
    if (pmesh) { MPI_Allreduce(MPI_IN_PLACE, &maxDist, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm()); }
 #endif
-   const double scale = upper - lower;
+   // const double scale = upper - lower;
    psi.ApplyMap([maxDist, lower, upper](double x)
    {
       double d = lower + (upper - lower)*(1.0 - std::pow(x / maxDist, 0.3));
@@ -292,7 +290,7 @@ void BridgePostRefine(int ser_ref_levels, int par_ref_levels,
                        ser_ref_levels + (par_ref_levels < 0 ? 0 : par_ref_levels));
    mesh->MarkBoundary([h](const Vector &x) {return ((x(0) > (2.0 - h)) && (x(1) < 1e-10)); },
    5);
-   mesh->MarkBoundary([h](const Vector &x) {return ((x(0) < 1e-10) && (x(1) < 0.8)); },
+   mesh->MarkBoundary([](const Vector &x) {return ((x(0) < 1e-10) && (x(1) < 0.8)); },
    6);
    Vector center(2);
    for (int i=0; i<mesh->GetNE(); i++)

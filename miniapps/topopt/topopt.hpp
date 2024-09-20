@@ -139,7 +139,6 @@ class IsoElasticityIntegrator : public BilinearFormIntegrator
 {
 private:
    Coefficient *E, *nu;
-   int ia;
 private:
 #ifndef MFEM_THREAD_SAFE
    DenseMatrix dshape; // scalar gradient
@@ -151,7 +150,7 @@ private:
    void VectorGradToVoigt(DenseMatrix &vals, DenseMatrix &voigt);
 
 public:
-   IsoElasticityIntegrator(Coefficient &E, Coefficient &nu, int ia=3): E(&E),
+   IsoElasticityIntegrator(Coefficient &E, Coefficient &nu): E(&E),
       nu(&nu), enforce_symmetricity(false) {}
 
    void EnforceSymmetricity(bool flag) { enforce_symmetricity = flag; }

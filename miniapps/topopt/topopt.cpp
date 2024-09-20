@@ -523,7 +523,7 @@ Coefficient &SIMPProjector::GetDerivative(GridFunction &frho)
 
 ThresholdProjector::ThresholdProjector(
    const double beta_, const double eta_, const double k_, const double rho0_)
-   :beta(beta_), eta(eta_), k(k_), rho0(rho0_)
+   :beta(beta_), eta(eta_), rho0(rho0_), k(k_)
 {
    phys_density.reset(new MappedGridFunctionCoefficient(
                          nullptr, [this](double x)
@@ -564,9 +564,9 @@ LatentDesignDensity::LatentDesignDensity(FiniteElementSpace &fes,
                                          std::function<double(double)> dual2primal,
                                          bool clip_lower, bool clip_upper):
    DesignDensity(fes, filter, vol_frac),
+   zero_gf(MakeGridFunction(&fes)),
    h(h), p2d(primal2dual), d2p(dual2primal),
    clip_lower(clip_lower), clip_upper(clip_upper),
-   zero_gf(MakeGridFunction(&fes)),
    use_primal_filter(true)
 {
    *x_gf = p2d(vol_frac);
@@ -677,7 +677,7 @@ double LatentDesignDensity::ComputeBregmanDivergence(const GridFunction &p,
 double FermiDiracDesignDensity::ComputeBregmanDivergence(const GridFunction &p,
                                                          const GridFunction &q)
 {
-   MappedPairGridFunctionCoeffitient Dh(&p, &q, [this](double x, double y)
+   MappedPairGridFunctionCoeffitient Dh(&p, &q, [](double x, double y)
    {
       // fliped_x = 1-x
       const double p = sigmoid(x);
@@ -685,14 +685,14 @@ double FermiDiracDesignDensity::ComputeBregmanDivergence(const GridFunction &p,
       const double log_p = safe_logsigmoid(x);
       const double log_1mp = safe_logsigmoid(-x);
 
-      const double q = sigmoid(y);
+      // const double q = sigmoid(y);
       const double log_q = safe_logsigmoid(y);
       const double log_1mq = safe_logsigmoid(-y);
 
       const double result1 = (log_1mp-log_1mq) + p*(x-y);
       const double result2 = (log_p-log_q) + pm1*(x-y);
-      auto print_sign = [](const double x) {return x < 0 ? '-' : '+'; };
-      auto print_ineq = [](const double x, const double y) {return x < y ? '<' : '>'; };
+      // auto print_sign = [](const double x) {return x < 0 ? '-' : '+'; };
+      // auto print_ineq = [](const double x, const double y) {return x < y ? '<' : '>'; };
       return std::max(std::max(result1, result2), 0.0);
    });
    // Since Bregman divergence is always positive, ||Dh||_L¹=∫_Ω Dh.
@@ -1162,7 +1162,7 @@ int Step_Bregman(TopOptProblem &problem, const GridFunction &x0,
    std::unique_ptr<LinearForm> bregman_form(MakeLinearForm(x_gf.FESpace()));
    bregman_form->AddDomainIntegrator(new DomainLFIntegrator(bregman));
 
-   double new_val, d, distance;
+   double new_val, d;
    int i;
    step_size /= shrink_factor;
    for (i=0; i<max_it; i++)
@@ -1174,8 +1174,8 @@ int Step_Bregman(TopOptProblem &problem, const GridFunction &x0,
       new_val = problem.Eval(); // re-evaluate at the updated point
       diff_densityForm.Assemble(); // re-evaluate density difference inner-product
       d = (diff_densityForm)(grad);
-      bregman_form->Assemble();
-      distance = bregman_form->Sum();
+      // bregman_form->Assemble();
+      // distance = bregman_form->Sum();
 #ifdef MFEM_USE_MPI
       if (pgrad)
       {
@@ -1234,9 +1234,9 @@ int Step_Armijo(TopOptProblem &problem, const GridFunction &x0,
 HelmholtzFilter::HelmholtzFilter(FiniteElementSpace &fes,
                                  const double eps, Array<int> &ess_bdr,
                                  bool enforce_symmetricity):DensityFilter(fes),
-   filter(MakeBilinearForm(&fes)), rhoform(MakeLinearForm(&fes)), eps2(eps*eps),
-   bdr_eps(eps),
-   ess_bdr(ess_bdr), material_bdr(ess_bdr), void_bdr(ess_bdr)
+   filter(MakeBilinearForm(&fes)), rhoform(MakeLinearForm(&fes)),
+   ess_bdr(ess_bdr), material_bdr(ess_bdr), void_bdr(ess_bdr),
+   eps2(eps*eps), bdr_eps(eps)
 {
    for (auto &val : ess_bdr) {val = val != 0; }
    for (auto &val : material_bdr) {val = val == 1; }
