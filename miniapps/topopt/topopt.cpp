@@ -1180,7 +1180,7 @@ int Step_Bregman(TopOptProblem &problem, const GridFunction &x0,
       if (pgrad)
       {
          MPI_Allreduce(MPI_IN_PLACE, &d, 1, MPI_DOUBLE, MPI_SUM, comm);
-         MPI_Allreduce(MPI_IN_PLACE, &distance, 1, MPI_DOUBLE, MPI_SUM, comm);
+         // MPI_Allreduce(MPI_IN_PLACE, &distance, 1, MPI_DOUBLE, MPI_SUM, comm);
       }
 #endif
       if (new_val < val + d + density.ComputeBregmanDivergence(x_gf, x0)/step_size &&
