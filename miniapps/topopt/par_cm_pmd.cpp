@@ -80,7 +80,8 @@ int main(int argc, char *argv[])
    double tol_stationarity = 1e-04;
    double tol_compliance = 5e-05;
    bool use_bregman = true;
-   double cx = 1.0;
+   bool use_guided_initial = false;
+   double cx = infinity();
    double cy = 0.0;
 
 
@@ -123,6 +124,7 @@ int main(int argc, char *argv[])
    args.Parse();
    if (!args.Good()) {if (Mpi::Root()) args.PrintUsage(mfem::out);}
 
+   if (isfinite(cx)) {use_guided_initial = true;}
 
    std::unique_ptr<Mesh> mesh;
    Array2D<int> ess_bdr;
@@ -232,6 +234,7 @@ int main(int argc, char *argv[])
    ParGridFunction &grad(*dynamic_cast<ParGridFunction*>(&optprob.GetGradient()));
    ParGridFunction &psi(*dynamic_cast<ParGridFunction*>
                         (&density.GetGridFunction()));
+   if (use_guided_initial)
    {
       Vector center({cx, cy});
       Array<Vector*> ports(3);
@@ -251,18 +254,18 @@ int main(int argc, char *argv[])
    if (glvis_visualization)
    {
       MPI_Barrier(MPI_COMM_WORLD);
-      designDensity_gf.reset(new ParGridFunction(&filter_fes));
+      // designDensity_gf.reset(new ParGridFunction(&filter_fes));
       rho_gf.reset(new ParGridFunction(&filter_fes));
-      designDensity_gf->ProjectCoefficient(densityProjector.GetPhysicalDensity(
-                                              density.GetFilteredDensity()));
+      // designDensity_gf->ProjectCoefficient(densityProjector.GetPhysicalDensity(
+      // density.GetFilteredDensity()));
       rho_gf->ProjectCoefficient(density.GetDensityCoefficient());
       sout_SIMP.open(vishost, visport);
       if (sout_SIMP.is_open())
       {
          sout_SIMP << "parallel " << num_procs << " " << myid << "\n";
          sout_SIMP.precision(8);
-         sout_SIMP << "solution\n" << *pmesh << *designDensity_gf
-                   << "window_title 'Design density r(ρ̃) - PMD "
+         sout_SIMP << "solution\n" << *pmesh << rho_filter
+                   << "window_title 'Filtered density ρ̃ - PMD "
                    << problem << "'\n"
                    << "keys Rjl***************\n"
                    << flush;
@@ -342,9 +345,9 @@ int main(int argc, char *argv[])
       old_grad = grad;
 
       // Step 3. Step and upate gradient
-      // num_reeval = Step_Armijo(optprob, old_psi, grad, diff_rho_form, c1, step_size,
-      //                          20);
-      num_reeval = Step_Bregman(optprob, old_psi, grad, diff_rho_form, step_size);
+      num_reeval = Step_Armijo(optprob, old_psi, grad, diff_rho_form, c1, step_size,
+                               20);
+      // num_reeval = Step_Bregman(optprob, old_psi, grad, diff_rho_form, step_size);
       compliance = optprob.GetValue();
       volume = density.GetVolume();
       optprob.UpdateGradient();
@@ -354,10 +357,10 @@ int main(int argc, char *argv[])
       {
          if (sout_SIMP.is_open())
          {
-            designDensity_gf->ProjectCoefficient(densityProjector.GetPhysicalDensity(
-                                                    density.GetFilteredDensity()));
+            // designDensity_gf->ProjectCoefficient(densityProjector.GetPhysicalDensity(
+            //                                         density.GetFilteredDensity()));
             sout_SIMP << "parallel " << num_procs << " " << myid << "\n";
-            sout_SIMP << "solution\n" << *pmesh << *designDensity_gf
+            sout_SIMP << "solution\n" << *pmesh << rho_filter
                       << flush;
             MPI_Barrier(MPI_COMM_WORLD); // try to prevent streams from mixing
          }

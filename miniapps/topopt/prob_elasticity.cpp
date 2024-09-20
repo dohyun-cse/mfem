@@ -28,7 +28,10 @@ void initialDesign(GridFunction& psi, Vector domain_center,
    });
    psi.ProjectCoefficient(dist);
    double maxDist = psi.Max();
-   MPI_Allreduce(MPI_IN_PLACE, &maxDist, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+#ifdef MFEM_USE_MPI
+   ParMesh *pmesh = dynamic_cast<ParMesh*>(psi.FESpace()->GetMesh());
+   if (pmesh) { MPI_Allreduce(MPI_IN_PLACE, &maxDist, 1, MPI_DOUBLE, MPI_MAX, pmesh->GetComm()); }
+#endif
    const double scale = upper - lower;
    psi.ApplyMap([maxDist, lower, upper](double x)
    {
@@ -337,18 +340,19 @@ void Cantilever3PreRefine(double &filter_radius, double &vol_fraction,
    ess_bdr_filter.SetSize(6);
    ess_bdr = 0; ess_bdr_filter = 0;
    ess_bdr(0, BDRY3D::XL) = 1;
-   ess_bdr_filter = -1;
-   ess_bdr_filter[BDRY3D::XL] = 0;
+   // ess_bdr_filter = -1;
+   // ess_bdr_filter[BDRY3D::XL] = 0;
 
-   const Vector center({1.9, 0.0, 0.1});
+   const Vector center({1.8, 0.0, 0.2});
+   const double r = 0.1;
    // force(0) = 0.0; force(1) = 0.0; force(2) = -1.0;
-   vforce_cf.reset(new VectorFunctionCoefficient(3, [center](const Vector &x,
-                                                             Vector &f)
+   vforce_cf.reset(new VectorFunctionCoefficient(3, [center,r](const Vector &x,
+                                                               Vector &f)
    {
       f = 0.0;
-      if (x[0] > center[0] && x[2] < center[2])
+      if (std::max(std::fabs(x[0]-center[0]),std::fabs(x[2]-center[2])) < r)
       {
-         f(2) = -10.0;
+         f(2) = -std::pow(2.0*r,-2.0);
       }
    }));
 }
@@ -509,10 +513,11 @@ void ForceInverterPreRefine(double &filter_radius, double &vol_fraction,
                             const int ref_levels, const int par_ref_levels)
 {
 
-   if (filter_radius < 0) { filter_radius = 2.5e-02; }
+   if (filter_radius < 0) { filter_radius = 5e-02; }
    if (vol_fraction < 0) { vol_fraction = 0.3; }
 
-   *mesh = Mesh::MakeCartesian2D(2, 1, mfem::Element::Type::QUADRILATERAL, true,
+   *mesh = Mesh::MakeCartesian2D(400, 200, mfem::Element::Type::QUADRILATERAL,
+                                 true,
                                  2.0,
                                  1.0);
    //                        X-Roller (3)
@@ -536,12 +541,14 @@ void ForceInverterPreRefine(double &filter_radius, double &vol_fraction,
    // ess_bdr_filter[5] = 1; ess_bdr_filter[6] = 1; ess_bdr_filter[7] = 1;
 
 
-   k_in = 1.0; k_out = 1e-03;
-   Vector traction(2); traction[0] = 1.0/std::pow(2,-(ref_levels+std::max(0.0,0.0 + par_ref_levels))); traction[1] = 0.0;
+   k_in = 1.0; k_out = 1e-02;
+   Vector traction(2);
+   traction[0] = 100.0;
+   traction[1] = 0.0;
    // rescale it to int_bdry = 1.
    t_in.reset(new VectorConstantCoefficient(traction));
    d_out.SetSize(2); d_out[0] = -1.0; d_out[1] = 0.0;
-   d_in.SetSize(2); d_in[0] = -1.0; d_in[1] = 0.0;
+   d_in.SetSize(2); d_in[0] = 1.0; d_in[1] = 0.0;
 }
 
 void ForceInverterPostRefine(int ref_levels, int par_ref_levels,
@@ -550,15 +557,15 @@ void ForceInverterPostRefine(int ref_levels, int par_ref_levels,
    double h = std::pow(2.0, -(ref_levels + std::max(0.0, 0.0 + par_ref_levels)));
    mesh->MarkBoundary([h](const Vector &x)
    {
-      return (x[0] > 2.0 - 0.1*h) && (x[1] > 1.0 - h); // Output - Right, Top h
+      return (x[0] > 2.0 - 0.1*h) && (x[1] > 1.0 - 0.01); // Output - Right, Top h
    }, 5);
    mesh->MarkBoundary([h](const Vector &x)
    {
-      return (x[0] < 0.0 + 0.1*h) && (x[1] > 1.0 - h); // Input - Left, Top h
+      return (x[0] < 0.0 + 0.1*h) && (x[1] > 1.0 - 0.01); // Input - Left, Top h
    }, 6);
    mesh->MarkBoundary([h](const Vector &x)
    {
-      return (x[0] < 0.0 + 0.1*h) && (x[1] < 0.0 + h); // Fixed - Left, Bottom h
+      return (x[0] < 0.0 + 0.1*h) && (x[1] < 0.01); // Fixed - Left, Bottom 1%
    }, 7);
 }
 }
