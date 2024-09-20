@@ -352,7 +352,7 @@ void Cantilever3PreRefine(double &filter_radius, double &vol_fraction,
       f = 0.0;
       if (std::max(std::fabs(x[0]-center[0]),std::fabs(x[2]-center[2])) < r)
       {
-         f(2) = -std::pow(2.0*r,-2.0);
+         f(2) = -10;
       }
    }));
 }

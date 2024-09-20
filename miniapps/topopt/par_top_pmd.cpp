@@ -499,14 +499,14 @@ int main(int argc, char *argv[])
       if (armijo)
       {
          num_reeval =
-            Step_Armijo(optprob, old_psi, grad, diff_rho_form, c1, step_size);
-            // Step_Armijo(optprob, old_psi, grad, diff_rho_form, c1, step_size, k==0?1:20);
+            // Step_Armijo(optprob, old_psi, grad, diff_rho_form, c1, step_size);
+            Step_Armijo(optprob, old_psi, grad, diff_rho_form, c1, step_size, k==0?1:20);
       }
       else
       {
          num_reeval =
-            Step_Bregman(optprob, old_psi, grad, diff_rho_form, step_size);
-            // Step_Bregman(optprob, old_psi, grad, diff_rho_form, step_size, k==0?1:20);
+            // Step_Bregman(optprob, old_psi, grad, diff_rho_form, step_size);
+            Step_Bregman(optprob, old_psi, grad, diff_rho_form, step_size, k==0?1:20);
       }
       // int_grad.Assemble();
       // double int_grad_val = int_grad.Sum();

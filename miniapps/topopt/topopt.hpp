@@ -635,7 +635,7 @@ protected:
    L2ProjectionLFIntegrator *L2projector; // not owned
    std::unique_ptr<LinearForm> filter_to_density;
    std::unique_ptr<BilinearForm> invmass;
-   std::unique_ptr<LinearForm> Mfrho;
+   std::unique_ptr<LinearForm> MgradF_filter;
    std::unique_ptr<GridFunctionCoefficient> gradF_filter_cf;
    std::unique_ptr<Coefficient> dEdfrho;
    const bool solve_dual;

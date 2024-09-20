@@ -883,11 +883,11 @@ TopOptProblem::TopOptProblem(LinearForm &objective,
       gradF_filter.reset(MakeGridFunction(density.FESpace_filter()));
       *gradF_filter = 0.0;
 
-      invmass.reset(new BilinearForm(density.FESpace()));
+      invmass.reset(MakeBilinearForm(density.FESpace()));
       invmass->AddDomainIntegrator(new InverseIntegrator(new MassIntegrator()));
-      gradF_filter_cf.reset(new GridFunctionCoefficient(&density.GetFilteredDensity()));
-      Mfrho.reset(new LinearForm(density.FESpace()));
-      Mfrho->AddDomainIntegrator(new DomainLFIntegrator(*gradF_filter_cf));
+      gradF_filter_cf.reset(new GridFunctionCoefficient(gradF_filter.get()));
+      MgradF_filter.reset(MakeLinearForm(density.FESpace()));
+      MgradF_filter->AddDomainIntegrator(new DomainLFIntegrator(*gradF_filter_cf));
       invmass->Assemble();
    }
 
@@ -923,8 +923,8 @@ void TopOptProblem::UpdateGradient()
    density.GetFilter().Apply(*dEdfrho, *gradF_filter, false);
    if (gradF_filter != gradF)
    {
-      Mfrho->Assemble();
-      invmass->Mult(*Mfrho, *gradF);
+      MgradF_filter->Assemble();
+      invmass->Mult(*MgradF_filter, *gradF);
    }
    if (gradF->FESpace()->GetMesh()->attributes.Max()>1)
    {
