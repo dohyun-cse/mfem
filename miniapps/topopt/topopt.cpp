@@ -693,16 +693,6 @@ double FermiDiracDesignDensity::ComputeBregmanDivergence(const GridFunction &p,
       const double result2 = (log_p-log_q) + pm1*(x-y);
       auto print_sign = [](const double x) {return x < 0 ? '-' : '+'; };
       auto print_ineq = [](const double x, const double y) {return x < y ? '<' : '>'; };
-      if (result1 < 0 || result2 < 0)
-      {
-         // mfem::out
-         //       << print_sign(x) << print_ineq(x, y) << print_sign(y)
-         //       << print_sign(result1) << print_sign( result2)
-         //       << ": " << p << ", " << q << ", " << result1 << ", " << result2 << std::endl;
-         // if (result1 < 0 && result2 < 0) {mfem::out << "Both Failed" << std::endl;}
-         // if (x > y && result2 < 0) { mfem::out << ">+-, Assertion failed." << std::endl; }
-         // if (x < y && result1 < 0) { mfem::out << "<-+, Assertion failed." << std::endl; }
-      }
       return std::max(std::max(result1, result2), 0.0);
    });
    // Since Bregman divergence is always positive, ||Dh||_L¹=∫_Ω Dh.
@@ -893,10 +883,12 @@ TopOptProblem::TopOptProblem(LinearForm &objective,
       gradF_filter.reset(MakeGridFunction(density.FESpace_filter()));
       *gradF_filter = 0.0;
 
-      L2projector = new L2ProjectionLFIntegrator(*gradF_filter);
-      filter_to_density.reset(MakeLinearForm(density.FESpace()));
-      filter_to_density->SetData(gradF->GetData());
-      filter_to_density->AddDomainIntegrator(L2projector);
+      invmass.reset(new BilinearForm(density.FESpace()));
+      invmass->AddDomainIntegrator(new InverseIntegrator(new MassIntegrator()));
+      gradF_filter_cf.reset(new GridFunctionCoefficient(&density.GetFilteredDensity()));
+      Mfrho.reset(new LinearForm(density.FESpace()));
+      Mfrho->AddDomainIntegrator(new DomainLFIntegrator(*gradF_filter_cf));
+      invmass->Assemble();
    }
 
 #ifdef MFEM_USE_MPI
@@ -931,9 +923,8 @@ void TopOptProblem::UpdateGradient()
    density.GetFilter().Apply(*dEdfrho, *gradF_filter, false);
    if (gradF_filter != gradF)
    {
-      filter_to_density->SetData(gradF->GetData());
-      L2projector->SetGridFunction(*gradF_filter);
-      filter_to_density->Assemble();
+      Mfrho->Assemble();
+      invmass->Mult(*Mfrho, *gradF);
    }
    if (gradF->FESpace()->GetMesh()->attributes.Max()>1)
    {
@@ -1271,7 +1262,7 @@ HelmholtzFilter::HelmholtzFilter(FiniteElementSpace &fes,
 void HelmholtzFilter::Apply(Coefficient &rho, GridFunction &frho,
                             bool apply_material_bdr)
 {
-   MFEM_ASSERT(frho.FESpace() != filter->FESpace(),
+   MFEM_ASSERT(frho.FESpace() == filter->FESpace(),
                "Filter is initialized with finite element space different from the given filtered density.");
    rhoform->GetDLFI()->DeleteAll();
    rhoform->AddDomainIntegrator(new DomainLFIntegrator(rho));
