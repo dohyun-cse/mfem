@@ -1264,8 +1264,8 @@ void HelmholtzFilter::Apply(Coefficient &rho, GridFunction &frho,
 {
    MFEM_ASSERT(frho.FESpace() == filter->FESpace(),
                "Filter is initialized with finite element space different from the given filtered density.");
-   rhoform->GetDLFI()->DeleteAll();
-   rhoform->AddDomainIntegrator(new DomainLFIntegrator(rho));
+   delete &rhoform->GetDLFI()->operator[](0);
+   rhoform->GetDLFI()->operator[](0) = new DomainLFIntegrator(rho);
 
    ConstantCoefficient zero_cf(0.0);
    frho.ProjectBdrCoefficient(zero_cf, void_bdr);
