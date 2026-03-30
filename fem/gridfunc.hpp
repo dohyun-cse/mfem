@@ -1969,6 +1969,7 @@ public:
       : VectorCoefficient(s.GetVDim()), n(n_), mesh_in(m), sol_in(s)
    { MFEM_VERIFY(n > 0, "Number of transverse elements must be positive!"); }
 
+   using VectorCoefficient::Eval;
    void Eval(Vector &v, ElementTransformation &T,
              const IntegrationPoint &ip) override;
 
