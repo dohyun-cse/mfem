@@ -145,6 +145,7 @@ void PGOperator::Mult(const Vector &x, Vector &y) const
       B.Mult(u, res_lambda);
       res_lambda.Add(-1.0, *dualgrad);
    }
+   Y.SyncFromBlocks();
 }
 
 // ---------------------------------------------------------------------------
@@ -182,6 +183,9 @@ Operator &PGOperator::GetGradient(const Vector &x) const
    H *= alpha;
    pg_blockmat->SetBlock(1, 1, &H);
    pg_op.reset(pg_blockmat->CreateMonolithic());
+   MFEM_VERIFY(pg_op->GetMemoryData().GetMemoryType() ==
+               x.GetMemory().GetMemoryType(),
+               "Memory type mismatch between H and x");
    return *pg_op;
 }
 
