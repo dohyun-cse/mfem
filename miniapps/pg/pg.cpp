@@ -110,29 +110,29 @@ PGOperator::PGOperator(Operator &A_,
 // Bu - grad R^*(psi^k - alpha*lambda)
 void PGOperator::Mult(const Vector &x, Vector &y) const
 {
-   out << "PGOperator::Mult" << std::endl;
+   if (debug) { out << "PGOperator::Mult" << std::endl; }
    // [u, lambda]
    BlockVector X(const_cast<Vector&>(x), offsets);
    Vector &u = X.GetBlock(0);
    Vector &lambda = X.GetBlock(1);
 
-   out << "PGOperator::Mult #1: latent update" << std::endl;
+   if (debug) { out << "PGOperator::Mult #1: latent update" << std::endl; }
    // psi = psi_k - alpha*lambda
    add(psi_k->GetTrueVector(), -alpha, lambda, psi->GetTrueVector());
    psi->SetFromTrueVector();
 
-   out << "PGOperator::Mult #2: setup output vector" << std::endl;
+   if (debug) { out << "PGOperator::Mult #2: setup output vector" << std::endl; }
    y.SetSize(Height());
    BlockVector Y(y, offsets);
    Vector &res_u = Y.GetBlock(0);
    Vector &res_lambda = Y.GetBlock(1);
 
-   out << "PGOperator::Mult #3: compute A*u - B^T*lambda" << std::endl;
+   if (debug) { out << "PGOperator::Mult #3: compute A*u - B^T*lambda" << std::endl; }
    // res_u = A*u - B^T*lambda
    A.Mult(u, res_u);
    neg_Bt->AddMult(lambda, res_u);
 
-   out << "PGOperator::Mult #4: compute B*u - grad R^*(psi)" << std::endl;
+   if (debug) { out << "PGOperator::Mult #4: compute B*u - grad R^*(psi)" << std::endl; }
    // res_lambda = B*u - gradinv(psi)
    // Assemble gradinv into dualgrad's own memory to avoid alias sync issues
    // with device memory, then combine via standard vector operations.
@@ -154,7 +154,7 @@ void PGOperator::Mult(const Vector &x, Vector &y) const
    // Block ops wrote correct data to y's device memory (shared via aliases).
    // Update y's flags: device valid, host stale.
    y.Write();
-   out << "PGOperator::Mult done" << std::endl;
+   if (debug) { out << "PGOperator::Mult done" << std::endl; }
 }
 
 // ---------------------------------------------------------------------------
@@ -162,16 +162,16 @@ void PGOperator::Mult(const Vector &x, Vector &y) const
 // ---------------------------------------------------------------------------
 Operator &PGOperator::GetGradient(const Vector &x) const
 {
-   out << "PGOperator::GetGradient" << std::endl;
+   if (debug) {out << "PGOperator::GetGradient" << std::endl; }
    BlockVector X(const_cast<Vector&>(x), offsets);
    // Vector &u = X.GetBlock(0);
    Vector &lambda = X.GetBlock(1);
 
-   out << "PGOperator::GetGradient #1: latent update" << std::endl;
+   if (debug) {out << "PGOperator::GetGradient #1: latent update" << std::endl; }
    add(psi_k->GetTrueVector(), -alpha, lambda, psi->GetTrueVector());
    psi->SetFromTrueVector();
 
-   out << "PGOperator::GetGradient #2: update dual Hessian" << std::endl;
+   if (debug) {out << "PGOperator::GetGradient #2: update dual Hessian" << std::endl; }
    dualhess->Update();
    dualhess->Assemble(false);
    if (parallel)
@@ -181,25 +181,25 @@ Operator &PGOperator::GetGradient(const Vector &x) const
       dualhess->FormSystemMatrix(latent_ess_tdof, *dualH);
       *dualH *= alpha;
 
-      out << "PGOperator::GetGradient #3: setup gradient operator" << std::endl;
+      if (debug) {out << "PGOperator::GetGradient #3: setup gradient operator" << std::endl; }
       Array2D<const HypreParMatrix*> blocks(2, 2);
       blocks(0, 0) = static_cast<const HypreParMatrix*>(&A);
       blocks(0, 1) = static_cast<const HypreParMatrix*>(neg_Bt.get());
       blocks(1, 0) = static_cast<const HypreParMatrix*>(&B);
       blocks(1, 1) = dualH.get();
       pg_op_par.reset(HypreParMatrixFromBlocks(blocks));
-      out << "PGOperator::GetGradient done" << std::endl;
+      if (debug) {out << "PGOperator::GetGradient done" << std::endl; }
       return *pg_op_par;
 #endif
    }
-   out << "PGOperator::GetGradient #3: setup gradient operator" << std::endl;
+   if (debug) {out << "PGOperator::GetGradient #3: setup gradient operator" << std::endl; }
    // serial
    SparseMatrix H;
    dualhess->FormSystemMatrix(latent_ess_tdof, H);
    H *= alpha;
    pg_blockmat->SetBlock(1, 1, &H);
    pg_op.reset(pg_blockmat->CreateMonolithic());
-   out << "PGOperator::GetGradient done" << std::endl;
+   if (debug) {out << "PGOperator::GetGradient done" << std::endl; }
    return *pg_op;
 }
 

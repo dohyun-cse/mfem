@@ -40,6 +40,7 @@ int main(int argc, char *argv[])
    bool use_cudss = false;
    real_t primal_tol = 1e-08;
    real_t dual_tol = 1e-08;
+   bool debug = false;
 
    OptionsParser args(argc, argv);
    // args.AddOption(&mesh_file, "-m", "--mesh",
@@ -56,6 +57,8 @@ int main(int argc, char *argv[])
    args.AddOption(&visualization, "-vis", "--visualization", "-no-vis",
                   "--no-visualization",
                   "Enable or disable GLVis visualization.");
+   args.AddOption(&debug, "-db", "--debug", "-no-debug", "--no-debug",
+                  "Enable or disable debug output.");
    args.Parse();
    if (!args.Good())
    {
@@ -144,6 +147,7 @@ int main(int argc, char *argv[])
    CoefficientScaledLegendreFunction entropy(new Shannon, one_cf, obstacle);
    real_t alpha=1.0;
    PGOperator pg_op(A, B, latent_fes, entropy, alpha);
+   pg_op.SetDebug(debug);
 
    std::unique_ptr<Solver> linear_solver;
    if (use_cudss && Device::Allows(Backend::CUDA_MASK))

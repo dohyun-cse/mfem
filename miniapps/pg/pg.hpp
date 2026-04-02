@@ -7,6 +7,7 @@ namespace mfem
 class PGOperator : public Operator
 {
 private:
+   bool debug = false;
    FiniteElementSpace &fespace;
    Operator &A;
    Operator &B;
@@ -29,6 +30,7 @@ private:
 #endif
 
 public:
+   void SetDebug(bool debug_) { debug = debug_; }
    PGOperator(Operator &A_,
               Operator &B_,
               FiniteElementSpace &fespace_,
