@@ -131,19 +131,16 @@ void PGOperator::Mult(const Vector &x, Vector &y) const
    {
 #ifdef MFEM_USE_MPI
       dualgrad->Assemble();
+      dualgrad.Neg();
       static_cast<ParLinearForm*>(dualgrad.get())->ParallelAssemble(res_lambda);
 #endif
    }
    else
    {
       dualgrad->Assemble();
-      res_lambda = *dualgrad;
+      res_lambda.Neg();
+      res_lambda.SyncAliasMemory(dualgrad);
    }
-   if (latent_ess_tdof.Size())
-   {
-      res_lambda.SetSubVector(latent_ess_tdof, 0.0);
-   }
-   res_lambda.Neg();
    B.AddMult(u, res_lambda);
 }
 

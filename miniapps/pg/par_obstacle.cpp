@@ -144,6 +144,7 @@ int main(int argc, char *argv[])
    ParGridFunction u(&primal_fes, X.GetBlock(0));
    ParGridFunction u_k(&primal_fes, Xk.GetBlock(0));
    u.ProjectBdrCoefficient(u_ex, ess_bdr);
+   u.GetTrueDofs(tX.GetBlock(0));
    ParGridFunction lambda(&latent_fes, X.GetBlock(1));
    ParGridFunction lambda_k(&latent_fes, Xk.GetBlock(1));
 
@@ -153,16 +154,18 @@ int main(int argc, char *argv[])
    diffusion.AddDomainIntegrator(new DiffusionIntegrator);
    diffusion.Assemble();
    HypreParMatrix A;
-   diffusion.FormLinearSystem(ess_tdof_list, u, F.GetBlock(0), A, tX.GetBlock(0),
-                              tF.GetBlock(0), 1);
+   diffusion.FormSystemMatrix(ess_tdof_list, A);
+   diffusion.ParallelEliminateTDofsInRHS(ess_tdof_list, tX.GetBlock(0),
+                                         tF.GetBlock(0));
 
    ParMixedBilinearForm mass(&primal_fes, &latent_fes);
    mass.AddDomainIntegrator(new MassIntegrator);
    mass.Assemble();
    HypreParMatrix B;
    Array<int> dummy(0);
-   mass.FormRectangularLinearSystem(ess_tdof_list, dummy, u, F.GetBlock(1), B,
-                                    tX.GetBlock(0), tF.GetBlock(1));
+   mass.FormRectangularSystemMatrix(ess_tdof_list, dummy, B);
+   mass.ParallelEliminateTrialTDofsInRHS(ess_tdof_list, tX.GetBlock(0),
+                                         tF.GetBlock(1));
 
    ConstantCoefficient one_cf(1.0);
    CoefficientScaledLegendreFunction entropy(new Shannon, one_cf, obstacle);

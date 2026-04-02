@@ -102,6 +102,8 @@ int main(int argc, char *argv[])
    //    and converting them to a list of true dofs.
    Array<int> ess_bdr(mesh.bdr_attributes.Size() ? mesh.bdr_attributes.Max() : 0);
    ess_bdr = 1;
+   Array<int> ess_tdofs;
+   primal_fes.GetEssentialTrueDofs(ess_bdr, ess_tdofs);
 
    Array<int> offsets(3);
    offsets[0] = 0;
@@ -124,16 +126,16 @@ int main(int argc, char *argv[])
    diffusion.AddDomainIntegrator(new DiffusionIntegrator);
    diffusion.Assemble();
    SparseMatrix A;
-   diffusion.FormLinearSystem(ess_bdr, u, F.GetBlock(0), A, X.GetBlock(0),
-                              F.GetBlock(0));
+   diffusion.FormSystemMatrix(ess_tdofs, A);
+   diffusion.EliminateVDofsInRHS(ess_tdofs, u, F.GetBlock(0));
 
    MixedBilinearForm mass(&primal_fes, &latent_fes);
    mass.AddDomainIntegrator(new MassIntegrator);
    mass.Assemble();
    SparseMatrix B;
    Array<int> dummy(0);
-   mass.FormRectangularLinearSystem(ess_bdr, dummy, u, F.GetBlock(1), B,
-                                    X.GetBlock(0), F.GetBlock(1));
+   mass.FormRectangularSystemMatrix(ess_tdofs, dummy, B);
+   mass.EliminateTrialVDofsInRHS(ess_tdofs, u, F.GetBlock(1));
 
    ConstantCoefficient one_cf(1.0);
    CoefficientScaledLegendreFunction entropy(new Shannon, one_cf, obstacle);
