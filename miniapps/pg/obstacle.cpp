@@ -106,8 +106,8 @@ int main(int argc, char *argv[])
    offsets[2] = latent_fes.GetTrueVSize(); // lambda
    offsets.PartialSum();
 
-   BlockVector X(offsets), B(offsets);
-   X = 0.0; B = 0.0;
+   BlockVector X(offsets), F(offsets);
+   X = 0.0; F = 0.0;
    GridFunction u(&primal_fes, X.GetBlock(0));
    u.ProjectBdrCoefficient(u_ex, ess_bdr);
    GridFunction lambda(&latent_fes, X.GetBlock(1));
@@ -116,13 +116,13 @@ int main(int argc, char *argv[])
    BilinearForm diffusion(&primal_fes);
    diffusion.AddDomainIntegrator(new DiffusionIntegrator);
    diffusion.Assemble();
-   diffusion.EliminateEssentialBC(ess_bdr, u, B.GetBlock(0));
+   diffusion.EliminateEssentialBC(ess_bdr, u, F.GetBlock(0));
    diffusion.Finalize();
 
    MixedBilinearForm mass(&primal_fes, &latent_fes);
    mass.AddDomainIntegrator(new MassIntegrator);
    mass.Assemble();
-   mass.EliminateTrialEssentialBC(ess_bdr, u, B.GetBlock(1));
+   mass.EliminateTrialEssentialBC(ess_bdr, u, F.GetBlock(1));
    mass.Finalize(false);
 
    ConstantCoefficient one_cf(1.0);
@@ -130,8 +130,6 @@ int main(int argc, char *argv[])
    real_t alpha=1.0;
    PGOperator pg_op(diffusion.SpMat(), mass.SpMat(), latent_fes,
                     entropy, alpha);
-
-   cout << "Size of linear system: " << pg_op.Height() << endl;
 
    std::unique_ptr<Solver> linear_solver;
    if (cudss_solver && Device::Allows(Backend::CUDA_MASK))
@@ -169,7 +167,7 @@ int main(int argc, char *argv[])
 
    for (int i=0; i<100; i++)
    {
-      pg_solver.Mult(B, X);
+      pg_solver.Mult(F, X);
       out << "PG iteration " << i << ", Newton it: " << pg_solver.GetNumIterations()
           << ", residual norm: " << pg_solver.GetFinalNorm() << endl;
       if (pg_solver.GetNumIterations() == 0) { break; }
@@ -179,7 +177,7 @@ int main(int argc, char *argv[])
    real_t err = u.ComputeL2Error(u_ex);
    cout << "L2 error: " << err << endl;
 
-   return 0;
+   return EXIT_SUCCESS;
 }
 
 real_t spherical_obstacle(const Vector &pt)
