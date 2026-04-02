@@ -131,16 +131,15 @@ void PGOperator::Mult(const Vector &x, Vector &y) const
    {
 #ifdef MFEM_USE_MPI
       dualgrad->Assemble();
-      dualgrad.Neg();
       static_cast<ParLinearForm*>(dualgrad.get())->ParallelAssemble(res_lambda);
 #endif
    }
    else
    {
+      dualgrad->Update(&fespace, res_lambda, 0);
       dualgrad->Assemble();
-      res_lambda.Neg();
-      res_lambda.SyncAliasMemory(dualgrad);
    }
+   res_lambda.Neg();
    B.AddMult(u, res_lambda);
 }
 
@@ -157,11 +156,12 @@ Operator &PGOperator::GetGradient(const Vector &x) const
    psi->SetFromTrueVector();
 
    dualhess->Update();
-   dualhess->Assemble();
+   dualhess->Assemble(false);
    if (parallel)
    {
 #ifdef MFEM_USE_MPI
-      dualhess->FormSystemMatrix(latent_ess_tdof, dualH);
+      dualH.reset(new HypreParMatrix);
+      dualhess->FormSystemMatrix(latent_ess_tdof, *dualH);
       *dualH *= alpha;
       Array2D<const HypreParMatrix*> blocks(2, 2);
       blocks(0, 0) = static_cast<const HypreParMatrix*>(&A);
