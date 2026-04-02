@@ -137,9 +137,9 @@ SparseMatrix::SparseMatrix(int *i, int *j, real_t *data, int m, int n)
      At(NULL),
      isSorted(false)
 {
-   I.Wrap(i, height+1, true);
-   J.Wrap(j, I[height], true);
-   A.Wrap(data, I[height], true);
+   I.Wrap(i, height+1, MemoryType::HOST, true);
+   J.Wrap(j, I[height], MemoryType::HOST, true);
+   A.Wrap(data, I[height], MemoryType::HOST, true);
 
 #ifdef MFEM_USE_MEMALLOC
    NodesMem = NULL;
