@@ -142,7 +142,11 @@ int main(int argc, char *argv[])
    }
    else
    {
+#ifdef MFEM_USE_SUITESPARSE
       linear_solver.reset(new UMFPackSolver);
+#else
+      MFEM_ABORT("Either GPU or SuiteSparse must be enabled");
+#endif
    }
 
 

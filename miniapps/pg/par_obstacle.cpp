@@ -135,13 +135,17 @@ int main(int argc, char *argv[])
    toffsets[2] = latent_fes.GetTrueVSize(); // lambda
    toffsets.PartialSum();
 
-   BlockVector X(offsets), F(offsets);
+   BlockVector X(offsets), F(offsets), Xk(offsets);
    BlockVector tX(toffsets), tF(toffsets);
    X = 0.0; F = 0.0;
    tX = 0.0; tF = 0.0;
    ParGridFunction u(&primal_fes, X.GetBlock(0));
+   ParGridFunction u_k(&primal_fes, Xk.GetBlock(0));
    u.ProjectBdrCoefficient(u_ex, ess_bdr);
    ParGridFunction lambda(&latent_fes, X.GetBlock(1));
+   ParGridFunction lambda_k(&latent_fes, Xk.GetBlock(1));
+
+   GridFunctionCoefficient u_cf(&u), lambda_cf(&lambda);
 
    ParBilinearForm diffusion(&primal_fes);
    diffusion.AddDomainIntegrator(new DiffusionIntegrator);
@@ -174,7 +178,11 @@ int main(int argc, char *argv[])
    }
    else
    {
+#ifdef MFEM_USE_MUMPS
       linear_solver.reset(new MUMPSSolver(comm));
+#else
+      MFEM_ABORT("Either GPU or SuiteSparse must be enabled");
+#endif
    }
 
 
@@ -201,6 +209,7 @@ int main(int argc, char *argv[])
    for (int i=0; i<100; i++)
    {
       pg_solver.Mult(tF, tX);
+      Xk.Swap(X);
       u.SetFromTrueDofs(tX.GetBlock(0));
       lambda.SetFromTrueDofs(tX.GetBlock(1));
       if (myid == 0)
@@ -208,6 +217,8 @@ int main(int argc, char *argv[])
          out << "PG iteration " << i << ", Newton it: " << pg_solver.GetNumIterations()
              << ", residual norm: " << pg_solver.GetFinalNorm() << endl;
       }
+      real_t primal_succ = u_k.ComputeL2Error(u_cf);
+      real_t dual_succ = lambda_k.ComputeL1Error(lambda_cf);
       if (pg_solver.GetNumIterations() == 0) { break; }
       pg_op.ProxUpdate(lambda);
       if (visualization)
