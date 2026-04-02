@@ -133,15 +133,17 @@ void PGOperator::Mult(const Vector &x, Vector &y) const
 #ifdef MFEM_USE_MPI
       dualgrad->Assemble();
       static_cast<ParLinearForm*>(dualgrad.get())->ParallelAssemble(res_lambda);
+      res_lambda.SyncAliasMemory(res_lambda);
 #endif
    }
    else
    {
       dualgrad->Update(&fespace, res_lambda, 0);
       dualgrad->Assemble();
-      dualgrad->SyncAliasMemory(res_lambda);
+      res_lambda.SyncAliasMemory(res_lambda);
    }
    B.AddMult(u, res_lambda);
+   res_lambda.SyncAliasMemory(res_lambda);
    y.SyncAliasMemory(y);
 }
 
