@@ -44,7 +44,12 @@ endif
 	$(MFEM_CXX) $(MFEM_LINK_FLAGS) $^ -o $@ $(MFEM_LIBS)
 
 %.o: $(SRC)%.cpp $(MFEM_LIB_FILE) $(CONFIG_MK)
-	$(MFEM_CXX) $(MFEM_FLAGS) -c $< -o $@
+	$(MFEM_CXX) $(MFEM_FLAGS) -MMD -MP -c $< -o $@
+
+# Include auto-generated header dependencies (silently ignore if not yet built)
+-include $(PG_COMMON_OBJ:.o=.d)
+ALL_MINIAPP_SRC = $(addsuffix .cpp, $(SEQ_MINIAPPS) $(PAR_MINIAPPS))
+-include $(ALL_MINIAPP_SRC:.cpp=.d)
 
 all: $(MINIAPPS)
 
