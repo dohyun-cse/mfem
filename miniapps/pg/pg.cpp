@@ -110,7 +110,6 @@ PGOperator::PGOperator(Operator &A_,
 // Bu - grad R^*(psi^k - alpha*lambda)
 void PGOperator::Mult(const Vector &x, Vector &y) const
 {
-   auto mt = x.GetMemory().GetMemoryType();
    // [u, lambda]
    BlockVector X(const_cast<Vector&>(x), offsets);
    Vector &u = X.GetBlock(0);
@@ -120,33 +119,32 @@ void PGOperator::Mult(const Vector &x, Vector &y) const
    add(psi_k->GetTrueVector(), -alpha, lambda, psi->GetTrueVector());
    psi->SetFromTrueVector();
 
-   y.SetSize(Height(), mt);
+   y.SetSize(Height());
    BlockVector Y(y, offsets);
    Vector &res_u = Y.GetBlock(0);
    Vector &res_lambda = Y.GetBlock(1);
 
+   // res_u = A*u - B^T*lambda
    A.Mult(u, res_u);
-   res_u.SyncAliasMemory(res_u);
    neg_Bt->AddMult(lambda, res_u);
-   res_u.SyncAliasMemory(res_u);
 
+   // res_lambda = B*u - gradinv(psi)
+   // Assemble gradinv into dualgrad's own memory to avoid alias sync issues
+   // with device memory, then combine via standard vector operations.
+   dualgrad->Assemble();
    if (parallel)
    {
 #ifdef MFEM_USE_MPI
-      dualgrad->Assemble();
       static_cast<ParLinearForm*>(dualgrad.get())->ParallelAssemble(res_lambda);
-      res_lambda.SyncAliasMemory(res_lambda);
+      res_lambda.Neg();
+      B.AddMult(u, res_lambda);
 #endif
    }
    else
    {
-      dualgrad->Update(&fespace, res_lambda, 0);
-      dualgrad->Assemble();
-      res_lambda.SyncAliasMemory(res_lambda);
+      B.Mult(u, res_lambda);
+      res_lambda.Add(-1.0, *dualgrad);
    }
-   B.AddMult(u, res_lambda);
-   res_lambda.SyncAliasMemory(res_lambda);
-   y.SyncAliasMemory(y);
 }
 
 // ---------------------------------------------------------------------------
@@ -154,7 +152,6 @@ void PGOperator::Mult(const Vector &x, Vector &y) const
 // ---------------------------------------------------------------------------
 Operator &PGOperator::GetGradient(const Vector &x) const
 {
-   MemoryType mt = x.GetMemory().GetMemoryType();
    BlockVector X(const_cast<Vector&>(x), offsets);
    // Vector &u = X.GetBlock(0);
    Vector &lambda = X.GetBlock(1);
@@ -185,11 +182,6 @@ Operator &PGOperator::GetGradient(const Vector &x) const
    H *= alpha;
    pg_blockmat->SetBlock(1, 1, &H);
    pg_op.reset(pg_blockmat->CreateMonolithic());
-   if (pg_op->GetMemoryData().GetMemoryType() != mt)
-   {
-      SparseMatrix * pg_op_mat = pg_op.release();
-      pg_op.reset(new SparseMatrix(*pg_op_mat, true, mt));
-   }
    return *pg_op;
 }
 
