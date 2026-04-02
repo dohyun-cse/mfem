@@ -122,14 +122,17 @@ int main(int argc, char *argv[])
    BilinearForm diffusion(&primal_fes);
    diffusion.AddDomainIntegrator(new DiffusionIntegrator);
    diffusion.Assemble();
-   diffusion.EliminateEssentialBC(ess_bdr, u, F.GetBlock(0));
-   diffusion.Finalize();
+   SparseMatrix A;
+   diffusion.FormLinearSystem(ess_bdr, u, F.GetBlock(0), A, X.GetBlock(0),
+                              F.GetBlock(0));
 
    MixedBilinearForm mass(&primal_fes, &latent_fes);
    mass.AddDomainIntegrator(new MassIntegrator);
    mass.Assemble();
-   mass.EliminateTrialEssentialBC(ess_bdr, u, F.GetBlock(1));
-   mass.Finalize(false);
+   SparseMatrix B;
+   Array<int> dummy(0);
+   mass.FormRectangularLinearSystem(ess_bdr, dummy, u, F.GetBlock(1), B,
+                                    X.GetBlock(0), F.GetBlock(1));
 
    ConstantCoefficient one_cf(1.0);
    CoefficientScaledLegendreFunction entropy(new Shannon, one_cf, obstacle);
