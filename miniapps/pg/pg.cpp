@@ -136,8 +136,8 @@ void PGOperator::Mult(const Vector &x, Vector &y) const
    }
    else
    {
-      dualgrad->SetData(res_lambda.GetData());
       dualgrad->Assemble();
+      res_lambda = *dualgrad;
    }
    if (latent_ess_tdof.Size())
    {
