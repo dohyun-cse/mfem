@@ -176,19 +176,17 @@ Operator &PGOperator::GetGradient(const Vector &x) const
       return *pg_op_par;
 #endif
    }
-   else
+   // serial
+   if (latent_ess_tdof.Size())
    {
-      if (latent_ess_tdof.Size())
-      {
-         dualhess->EliminateEssentialBC(latent_ess_tdof);
-      }
-      dualhess->Finalize(false);
-      SparseMatrix &H = dualhess->SpMat();
-      H *= alpha;
-      pg_blockmat->SetBlock(1, 1, &H);
-      pg_op.reset(pg_blockmat->CreateMonolithic());
-      return *pg_op;
+      dualhess->EliminateEssentialBC(latent_ess_tdof);
    }
+   dualhess->Finalize(false);
+   SparseMatrix &H = dualhess->SpMat();
+   H *= alpha;
+   pg_blockmat->SetBlock(1, 1, &H);
+   pg_op.reset(pg_blockmat->CreateMonolithic());
+   return *pg_op;
 }
 
 } // namespace mfem
