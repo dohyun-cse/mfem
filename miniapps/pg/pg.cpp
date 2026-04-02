@@ -110,6 +110,7 @@ PGOperator::PGOperator(Operator &A_,
 // Bu - grad R^*(psi^k - alpha*lambda)
 void PGOperator::Mult(const Vector &x, Vector &y) const
 {
+   auto mt = y.GetMemory().GetMemoryType();
    // [u, lambda]
    BlockVector X(const_cast<Vector&>(x), offsets);
    Vector &u = X.GetBlock(0);
@@ -119,7 +120,7 @@ void PGOperator::Mult(const Vector &x, Vector &y) const
    add(psi_k->GetTrueVector(), -alpha, lambda, psi->GetTrueVector());
    psi->SetFromTrueVector();
 
-   y.SetSize(Height());
+   y.SetSize(Height(), mt);
    BlockVector Y(y, offsets);
    Vector &res_u = Y.GetBlock(0);
    Vector &res_lambda = Y.GetBlock(1);
