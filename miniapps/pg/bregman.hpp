@@ -519,6 +519,7 @@ public:
       return *this;
    }
 
+   using LegendreFunction::operator();
    real_t operator()(const Vector &x, ElementTransformation &Tr) const override
    {
       real_t sum = 0.0;
@@ -530,6 +531,7 @@ public:
       }
       return sum;
    }
+   using LegendreFunction::grad;
    void grad(const Vector &x, ElementTransformation &Tr, Vector &g) const override
    {
       g.SetSize(x.Size());
@@ -541,6 +543,7 @@ public:
          funcs[i]->grad(x_sub, Tr, g_sub);
       }
    }
+   using LegendreFunction::gradinv;
    void gradinv(const Vector &x, ElementTransformation &Tr,
                 Vector &invg) const override
    {
@@ -792,6 +795,8 @@ public:
       : VectorCoefficient(psi.GetVDim()), f(func),
         latent(&psi), own_coeff(false) {}
    virtual ~PrimalVectorCoefficient() { if (own_coeff && latent) { delete latent; } }
+
+   using VectorCoefficient::Eval;
    void Eval(Vector &u, ElementTransformation &Tr,
              const IntegrationPoint &ip) override
    {
