@@ -154,6 +154,7 @@ void PGOperator::Mult(const Vector &x, Vector &y) const
 // ---------------------------------------------------------------------------
 Operator &PGOperator::GetGradient(const Vector &x) const
 {
+   MemoryType mt = x.GetMemory().GetMemoryType();
    BlockVector X(const_cast<Vector&>(x), offsets);
    // Vector &u = X.GetBlock(0);
    Vector &lambda = X.GetBlock(1);
@@ -184,8 +185,11 @@ Operator &PGOperator::GetGradient(const Vector &x) const
    H *= alpha;
    pg_blockmat->SetBlock(1, 1, &H);
    pg_op.reset(pg_blockmat->CreateMonolithic());
-   MemoryType mt = Device::GetMemoryType();
-   pg_op->UseGPUSparse(mt == MemoryType::DEVICE);
+   if (pg_op->GetMemoryData().GetMemoryType() != mt)
+   {
+      SparseMatrix * pg_op_mat = pg_op.release();
+      pg_op.reset(new SparseMatrix(*pg_op_mat, true, mt));
+   }
    return *pg_op;
 }
 
