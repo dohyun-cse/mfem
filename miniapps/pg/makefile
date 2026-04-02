@@ -73,7 +73,7 @@ $(MFEM_LIB_FILE):
 clean: clean-build clean-exec
 
 clean-build:
-	rm -f *.o *~ $(SEQ_MINIAPPS) $(PAR_MINIAPPS)
+	rm -f *.o *.d *~ $(SEQ_MINIAPPS) $(PAR_MINIAPPS)
 	rm -rf *.dSYM *.TVD.*breakpoints
 
 clean-exec:
