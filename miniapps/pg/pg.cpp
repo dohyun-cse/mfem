@@ -151,9 +151,6 @@ void PGOperator::Mult(const Vector &x, Vector &y) const
       res_lambda.Add(-1.0, *dualgrad);
    }
 
-   out << "PGOperator::Mult #5: sync output vector" << std::endl;
-   Y.SyncFromBlocks();
-
    out << "PGOperator::Mult done" << std::endl;
 }
 
