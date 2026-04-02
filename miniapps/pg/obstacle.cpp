@@ -37,7 +37,7 @@ int main(int argc, char *argv[])
    int ref_levels = 0;
    const char *device_config = "cpu";
    bool visualization = true;
-   bool cudss_solver = false;
+   bool use_cudss = false;
    real_t primal_tol = 1e-08;
    real_t dual_tol = 1e-08;
 
@@ -51,7 +51,7 @@ int main(int argc, char *argv[])
                   "Number of times to refine the mesh uniformly.");
    args.AddOption(&device_config, "-d", "--device",
                   "Device configuration string, see Device::Configure().");
-   args.AddOption(&cudss_solver, "-cudss", "--cudss-solver", "-no-cudss",
+   args.AddOption(&use_cudss, "-cudss", "--cudss-solver", "-no-cudss",
                   "--no-cudss-solver", "Use the cuDSS Solver.");
    args.AddOption(&visualization, "-vis", "--visualization", "-no-vis",
                   "--no-visualization",
@@ -138,11 +138,11 @@ int main(int argc, char *argv[])
                     entropy, alpha);
 
    std::unique_ptr<Solver> linear_solver;
-   if (cudss_solver && Device::Allows(Backend::CUDA_MASK))
+   if (use_cudss && Device::Allows(Backend::CUDA_MASK))
    {
 #ifdef MFEM_USE_CUDSS
-      auto * CuDSSSolver cudss_solver = new CuDSSSolver;
-      solver->SetReorderingReuse(true);
+      auto * cudss_solver = new CuDSSSolver;
+      cudss_solver->SetReorderingReuse(true);
       linear_solver.reset(cudss_solver);
 #endif
    }
