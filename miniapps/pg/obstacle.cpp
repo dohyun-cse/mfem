@@ -142,7 +142,7 @@ int main(int argc, char *argv[])
    {
 #ifdef MFEM_USE_CUDSS
       auto * cudss_solver = new CuDSSSolver;
-      cudss_solver->SetReorderingReuse(true);
+      // cudss_solver->SetReorderingReuse(true);
       linear_solver.reset(cudss_solver);
 #endif
    }
