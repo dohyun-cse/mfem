@@ -54,7 +54,6 @@ public:
    {
       psi_k->Add(-alpha, lambda);
       psi_k->SetTrueVector();
-      psi_k->SyncAliasMemory(*psi_k);
    }
 };
 

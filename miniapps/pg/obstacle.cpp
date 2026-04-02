@@ -187,12 +187,15 @@ int main(int argc, char *argv[])
    cout << "Initial L2 error: " << err0 << endl;
    for (int i=0; i<100; i++)
    {
+      out << "PG iteration: #1 Store previous solution" << endl;
       Xk = X;
       Xk.HostRead();
+      out << "PG iteration: #2 Newton" << endl;
       pg_solver.Mult(F, X);
       X.HostRead();
       out << "PG iteration " << i << ", Newton it: " << pg_solver.GetNumIterations()
           << ", residual norm: " << pg_solver.GetFinalNorm() << endl;
+      out << "PG iteration: #3 Compute errors" << endl;
       real_t primal_diff = u_k.ComputeL2Error(u_cf);
       real_t dual_diff = lambda_k.ComputeL1Error(lambda_cf);
       real_t primal_err = u.ComputeL2Error(u_ex);
@@ -203,8 +206,12 @@ int main(int argc, char *argv[])
       {
          break;
       }
+      out << "PG iteration: #4 Update proximal operator" << endl;
       pg_op.ProxUpdate(lambda);
-      *sol_sock << "solution\n" << mesh << u << flush;
+      if (visualization)
+      {
+         *sol_sock << "solution\n" << mesh << u << flush;
+      }
    }
    real_t err = u.ComputeL2Error(u_ex);
    cout << "L2 error: " << err << endl;
