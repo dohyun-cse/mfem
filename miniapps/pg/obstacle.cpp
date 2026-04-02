@@ -212,14 +212,6 @@ int main(int argc, char *argv[])
    real_t err = u.ComputeL2Error(u_ex);
    cout << "L2 error: " << err << endl;
 
-   SparseMatrix &Grad = static_cast<SparseMatrix&>(pg_op.GetGradient(X));
-   Grad.Clear();
-   out << "Gradient cleared" << endl;
-   X.Destroy();
-   out << "X destroyed" << endl;
-   Xk.Destroy();
-   out << "Xk destroyed" << endl;
-
    return EXIT_SUCCESS;
 }
 
