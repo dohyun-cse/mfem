@@ -190,7 +190,7 @@ int main(int argc, char *argv[])
       Xk = X;
       Xk.SyncToBlocks();
       pg_solver.Mult(F, X);
-      X.SyncToBlocks();
+      X.SyncFromBlocks();
       out << "PG iteration " << i << ", Newton it: " << pg_solver.GetNumIterations()
           << ", residual norm: " << pg_solver.GetFinalNorm() << endl;
       real_t primal_diff = u_k.ComputeL2Error(u_cf);
