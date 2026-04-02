@@ -178,6 +178,8 @@ Operator &PGOperator::GetGradient(const Vector &x) const
    H *= alpha;
    pg_blockmat->SetBlock(1, 1, &H);
    pg_op.reset(pg_blockmat->CreateMonolithic());
+   MemoryType mt = Device::GetMemoryType();
+   pg_op->UseGPUSparse(mt == MemoryType::DEVICE);
    return *pg_op;
 }
 
