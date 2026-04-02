@@ -138,6 +138,7 @@ void PGOperator::Mult(const Vector &x, Vector &y) const
    {
       dualgrad->Update(&fespace, res_lambda, 0);
       dualgrad->Assemble();
+      dualgrad->SyncAliasMemory(res_lambda);
    }
    res_lambda.Neg();
    B.AddMult(u, res_lambda);
