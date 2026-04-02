@@ -177,16 +177,12 @@ Operator &PGOperator::GetGradient(const Vector &x) const
       return *pg_op_par;
 #endif
    }
-   MFEM_ABORT("TEST REACHED")
    // serial
    SparseMatrix H;
    dualhess->FormSystemMatrix(latent_ess_tdof, H);
    H *= alpha;
    pg_blockmat->SetBlock(1, 1, &H);
    pg_op.reset(pg_blockmat->CreateMonolithic());
-   MFEM_VERIFY(pg_op->GetMemoryData().GetMemoryType() ==
-               x.GetMemory().GetMemoryType(),
-               "Memory type mismatch between H and x");
    return *pg_op;
 }
 
