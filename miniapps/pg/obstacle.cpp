@@ -183,6 +183,8 @@ int main(int argc, char *argv[])
    pg_solver.SetSolver(*linear_solver);
    pg_solver.SetOperator(pg_op);
 
+   real_t err0 = u.ComputeL2Error(u_ex);
+   cout << "Initial L2 error: " << err0 << endl;
    for (int i=0; i<100; i++)
    {
       Xk = X;
