@@ -13,14 +13,14 @@ private:
    std::unique_ptr<Operator> neg_Bt;
    std::unique_ptr<BlockMatrix> pg_blockmat;
    const real_t &alpha;
-   std::unique_ptr<BilinearForm> dualhess;
-   std::unique_ptr<LinearForm> dualgrad;
-   std::unique_ptr<GridFunction> psi_k;
-   std::unique_ptr<GridFunction> psi;
    std::unique_ptr<PrimalCoefficient> primal_cf;
    std::unique_ptr<PrimalJacobianCoefficient> primal_jacobian_cf;
+   std::unique_ptr<GridFunction> psi_k;
+   std::unique_ptr<GridFunction> psi;
+   std::unique_ptr<BilinearForm> dualhess;
+   std::unique_ptr<LinearForm> dualgrad;
    mutable std::unique_ptr<SparseMatrix> pg_op;
-   Array<int> latent_ess_tdof;
+   mutable Array<int> latent_ess_tdof;
    Array<int> offsets;
    bool parallel = false;
 #ifdef MFEM_USE_MPI

@@ -164,8 +164,7 @@ Operator &PGOperator::GetGradient(const Vector &x) const
    if (parallel)
    {
 #ifdef MFEM_USE_MPI
-      dualhess->Finalize(false);
-      dualH.reset(static_cast<ParBilinearForm*>(dualhess.get())->ParallelAssemble());
+      dualhess->FormSystemMatrix(latent_ess_tdof, dualH);
       *dualH *= alpha;
       Array2D<const HypreParMatrix*> blocks(2, 2);
       blocks(0, 0) = static_cast<const HypreParMatrix*>(&A);
@@ -177,12 +176,8 @@ Operator &PGOperator::GetGradient(const Vector &x) const
 #endif
    }
    // serial
-   if (latent_ess_tdof.Size())
-   {
-      dualhess->EliminateEssentialBC(latent_ess_tdof);
-   }
-   dualhess->Finalize(false);
-   SparseMatrix &H = dualhess->SpMat();
+   SparseMatrix H;
+   dualhess->FormSystemMatrix(latent_ess_tdof, H);
    H *= alpha;
    pg_blockmat->SetBlock(1, 1, &H);
    pg_op.reset(pg_blockmat->CreateMonolithic());

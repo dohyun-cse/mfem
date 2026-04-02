@@ -137,8 +137,7 @@ int main(int argc, char *argv[])
    ConstantCoefficient one_cf(1.0);
    CoefficientScaledLegendreFunction entropy(new Shannon, one_cf, obstacle);
    real_t alpha=1.0;
-   PGOperator pg_op(diffusion.SpMat(), mass.SpMat(), latent_fes,
-                    entropy, alpha);
+   PGOperator pg_op(A, B, latent_fes, entropy, alpha);
 
    std::unique_ptr<Solver> linear_solver;
    if (use_cudss && Device::Allows(Backend::CUDA_MASK))
