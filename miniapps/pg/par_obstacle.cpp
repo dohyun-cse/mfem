@@ -48,6 +48,8 @@ int main(int argc, char *argv[])
    const char *device_config = "cpu";
    bool visualization = true;
    bool cudss_solver = false;
+   real_t primal_tol = 1e-08;
+   real_t dual_tol = 1e-08;
 
    OptionsParser args(argc, argv);
    // args.AddOption(&mesh_file, "-m", "--mesh",
@@ -208,8 +210,8 @@ int main(int argc, char *argv[])
 
    for (int i=0; i<100; i++)
    {
+      Xk = X;
       pg_solver.Mult(tF, tX);
-      Xk.Swap(X);
       u.SetFromTrueDofs(tX.GetBlock(0));
       lambda.SetFromTrueDofs(tX.GetBlock(1));
       if (myid == 0)
@@ -217,9 +219,17 @@ int main(int argc, char *argv[])
          out << "PG iteration " << i << ", Newton it: " << pg_solver.GetNumIterations()
              << ", residual norm: " << pg_solver.GetFinalNorm() << endl;
       }
-      real_t primal_succ = u_k.ComputeL2Error(u_cf);
-      real_t dual_succ = lambda_k.ComputeL1Error(lambda_cf);
-      if (pg_solver.GetNumIterations() == 0) { break; }
+      real_t primal_diff = u_k.ComputeL2Error(u_cf);
+      real_t dual_diff = lambda_k.ComputeL1Error(lambda_cf);
+      if (myid == 0)
+      {
+         out << "   primal diff = " << primal_diff
+             << ", dual diff = " << dual_diff << endl;
+      }
+      if (primal_diff < primal_tol && dual_diff < dual_tol)
+      {
+         break;
+      }
       pg_op.ProxUpdate(lambda);
       if (visualization)
       {

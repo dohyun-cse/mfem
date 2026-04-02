@@ -38,6 +38,8 @@ int main(int argc, char *argv[])
    const char *device_config = "cpu";
    bool visualization = true;
    bool cudss_solver = false;
+   real_t primal_tol = 1e-08;
+   real_t dual_tol = 1e-08;
 
    OptionsParser args(argc, argv);
    // args.AddOption(&mesh_file, "-m", "--mesh",
@@ -106,11 +108,15 @@ int main(int argc, char *argv[])
    offsets[2] = latent_fes.GetTrueVSize(); // lambda
    offsets.PartialSum();
 
-   BlockVector X(offsets), F(offsets);
+   BlockVector X(offsets), F(offsets), Xk(offsets);
    X = 0.0; F = 0.0;
    GridFunction u(&primal_fes, X.GetBlock(0));
+   GridFunction u_k(&primal_fes, Xk.GetBlock(0));
    u.ProjectBdrCoefficient(u_ex, ess_bdr);
    GridFunction lambda(&latent_fes, X.GetBlock(1));
+   GridFunction lambda_k(&latent_fes, Xk.GetBlock(1));
+
+   GridFunctionCoefficient u_cf(&u), lambda_cf(&lambda);
 
 
    BilinearForm diffusion(&primal_fes);
@@ -171,10 +177,18 @@ int main(int argc, char *argv[])
 
    for (int i=0; i<100; i++)
    {
+      Xk = X;
       pg_solver.Mult(F, X);
       out << "PG iteration " << i << ", Newton it: " << pg_solver.GetNumIterations()
           << ", residual norm: " << pg_solver.GetFinalNorm() << endl;
-      if (pg_solver.GetNumIterations() == 0) { break; }
+      real_t primal_diff = u_k.ComputeL2Error(u_cf);
+      real_t dual_diff = lambda_k.ComputeL1Error(lambda_cf);
+      out << "   primal diff = " << primal_diff
+          << ", dual diff = " << dual_diff << endl;
+      if (primal_diff < primal_tol && dual_diff < dual_tol)
+      {
+         break;
+      }
       pg_op.ProxUpdate(lambda);
       *sol_sock << "solution\n" << mesh << u << flush;
    }
