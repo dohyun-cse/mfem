@@ -116,7 +116,7 @@ int main(int argc, char *argv[])
    GridFunction u(&primal_fes, X.GetBlock(0));
    GridFunction u_k(&primal_fes, Xk.GetBlock(0));
    u.ProjectBdrCoefficient(u_ex, ess_bdr);
-   u.SyncAliasMemory(u);
+   X.SyncFromBlocks();
    GridFunction lambda(&latent_fes, X.GetBlock(1));
    GridFunction lambda_k(&latent_fes, Xk.GetBlock(1));
 
@@ -137,7 +137,7 @@ int main(int argc, char *argv[])
    Array<int> dummy(0);
    mass.FormRectangularSystemMatrix(ess_tdofs, dummy, B);
    mass.EliminateTrialVDofsInRHS(ess_tdofs, u, F.GetBlock(1));
-   F.SyncAliasMemory(F);
+   F.SyncFromBlocks();
 
    ConstantCoefficient one_cf(1.0);
    CoefficientScaledLegendreFunction entropy(new Shannon, one_cf, obstacle);
@@ -185,9 +185,8 @@ int main(int argc, char *argv[])
    for (int i=0; i<100; i++)
    {
       Xk = X;
-      Xk.SyncAliasMemory(Xk);
       pg_solver.Mult(F, X);
-      X.SyncAliasMemory(X);
+      X.SyncToBlocks();
       out << "PG iteration " << i << ", Newton it: " << pg_solver.GetNumIterations()
           << ", residual norm: " << pg_solver.GetFinalNorm() << endl;
       real_t primal_diff = u_k.ComputeL2Error(u_cf);
