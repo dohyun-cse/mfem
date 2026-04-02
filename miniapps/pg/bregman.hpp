@@ -469,6 +469,9 @@ public:
    // @param[in] x The point at which to evaluate the function
    // @return The value of the function at x
 
+   using LegendreFunction::operator();
+   using LegendreFunction::grad;
+   using LegendreFunction::gradinv;
    void gradinv(const Vector &x, Vector &invg) const override
    {
       V.MultTranspose(x, Vtx);
@@ -479,6 +482,7 @@ public:
                 Vector &invg) const override
    { this->gradinv(x, invg); }
 
+   using LegendreFunction::hessinv;
    // void hessinv(const Vector &x, DenseMatrix &H) const override
    // { y = x; y *= scale; f->hessinv(y, H); H *= scale * scale; }
    // void hessinv(const Vector &x, ElementTransformation &Tr,
