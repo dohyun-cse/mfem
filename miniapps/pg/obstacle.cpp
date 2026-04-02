@@ -68,6 +68,7 @@ int main(int argc, char *argv[])
    //    CUDA, OCCA, RAJA and OpenMP based on command line options.
    Device device(device_config);
    device.Print();
+   MemoryType mt = device.GetMemoryType();
 
    // 3. Read the mesh from the given mesh file. We can handle triangular,
    //    quadrilateral, tetrahedral, hexahedral, surface and volume meshes with
@@ -108,7 +109,7 @@ int main(int argc, char *argv[])
    offsets[2] = latent_fes.GetTrueVSize(); // lambda
    offsets.PartialSum();
 
-   BlockVector X(offsets), F(offsets), Xk(offsets);
+   BlockVector X(offsets, mt), F(offsets, mt), Xk(offsets, mt);
    X = 0.0; F = 0.0;
    GridFunction u(&primal_fes, X.GetBlock(0));
    GridFunction u_k(&primal_fes, Xk.GetBlock(0));
