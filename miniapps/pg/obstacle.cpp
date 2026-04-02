@@ -116,6 +116,7 @@ int main(int argc, char *argv[])
    GridFunction u(&primal_fes, X.GetBlock(0));
    GridFunction u_k(&primal_fes, Xk.GetBlock(0));
    u.ProjectBdrCoefficient(u_ex, ess_bdr);
+   u.SyncAliasMemory(u);
    GridFunction lambda(&latent_fes, X.GetBlock(1));
    GridFunction lambda_k(&latent_fes, Xk.GetBlock(1));
 
