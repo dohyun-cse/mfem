@@ -151,6 +151,9 @@ void PGOperator::Mult(const Vector &x, Vector &y) const
       res_lambda.Add(-1.0, *dualgrad);
    }
 
+   // Block ops wrote correct data to y's device memory (shared via aliases).
+   // Update y's flags: device valid, host stale.
+   y.Write();
    out << "PGOperator::Mult done" << std::endl;
 }
 
