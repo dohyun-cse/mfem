@@ -126,7 +126,9 @@ void PGOperator::Mult(const Vector &x, Vector &y) const
    Vector &res_lambda = Y.GetBlock(1);
 
    A.Mult(u, res_u);
+   res_u.SyncAliasMemory(res_u);
    neg_Bt->AddMult(lambda, res_u);
+   res_u.SyncAliasMemory(res_u);
 
    if (parallel)
    {
