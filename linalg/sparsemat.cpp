@@ -3640,9 +3640,9 @@ SparseMatrix *Transpose (const SparseMatrix &A)
    A_j    = A.HostReadJ();
    A_data = A.HostReadData();
 
-   At_i = Memory<int>(n+1);
-   At_j = Memory<int>(nnz);
-   At_data = Memory<real_t>(nnz);
+   At_i = new int[n+1];
+   At_j = new int[nnz];
+   At_data = new real_t[nnz];
 
    for (i = 0; i <= n; i++)
    {
@@ -3711,9 +3711,9 @@ SparseMatrix *TransposeAbstractSparseMatrix (const AbstractSparseMatrix &A,
    }
    nnz = A.NumNonZeroElems();
 
-   At_i = Memory<int>(n+1);
-   At_j = Memory<int>(nnz);
-   At_data = Memory<real_t>(nnz);
+   At_i = new int[n+1];
+   At_j = new int[nnz];
+   At_data = new real_t[nnz];
 
    for (i = 0; i <= n; i++)
    {
