@@ -9,6 +9,7 @@
 # Object and library files
 *.o
 *.o.tmp
+*.d
 /libmfem.*
 /miniapps/common/libmfem-common.*
 

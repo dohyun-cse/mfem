@@ -177,6 +177,7 @@ Operator &PGOperator::GetGradient(const Vector &x) const
       return *pg_op_par;
 #endif
    }
+   MFEM_ABORT("TEST REACHED")
    // serial
    SparseMatrix H;
    dualhess->FormSystemMatrix(latent_ess_tdof, H);

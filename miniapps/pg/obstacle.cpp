@@ -188,6 +188,7 @@ int main(int argc, char *argv[])
       Xk = X;
       Xk.SyncToBlocks();
       pg_solver.Mult(F, X);
+      return EXIT_SUCCESS;
       X.SyncToBlocks();
       out << "PG iteration " << i << ", Newton it: " << pg_solver.GetNumIterations()
           << ", residual norm: " << pg_solver.GetFinalNorm() << endl;
