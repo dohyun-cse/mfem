@@ -47,6 +47,7 @@ PGOperator::PGOperator(Operator &A_,
    primal_jacobian_cf = std::make_unique<PrimalJacobianCoefficient>(*psi, entropy);
    dualhess  = std::make_unique<BilinearForm>(&fespace_);
    dualhess->AddDomainIntegrator(new MassIntegrator(*primal_jacobian_cf));
+   dualhess->UsePrecomputedSparsity();
 
    pg_blockmat = std::make_unique<BlockMatrix>(offsets);
    pg_blockmat->SetBlock(0, 0, static_cast<SparseMatrix*>(&A));
