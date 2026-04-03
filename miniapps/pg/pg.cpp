@@ -132,22 +132,51 @@ void PGOperator::Mult(const Vector &x, Vector &y) const
    Vector &res_u = Y.GetBlock(0);
    Vector &res_lambda = Y.GetBlock(1);
 
+   if (debug)
+   {
+      u.HostRead(); lambda.HostRead();
+      out << "PGOperator::Mult norms: ||u|| = " << u.Norml2()
+          << ", ||lambda|| = " << lambda.Norml2()
+          << ", ||psi|| = " << psi->Norml2() << std::endl;
+   }
+
    if (debug) { out << "PGOperator::Mult #3: compute A*u - B^T*lambda" << std::endl; }
    // res_u = A*u - B^T*lambda
    A.Mult(u, res_u);
    neg_Bt->AddMult(lambda, res_u);
+
+   if (debug)
+   {
+      res_u.HostRead();
+      out << "  ||A*u - B^T*lambda|| = " << res_u.Norml2() << std::endl;
+   }
 
    if (debug) { out << "PGOperator::Mult #4: compute B*u - grad R^*(psi)" << std::endl; }
    // res_lambda = B*u - gradinv(psi)
    // Assemble gradinv into dualgrad's own memory to avoid alias sync issues
    // with device memory, then combine via standard vector operations.
    dualgrad->Assemble();
+   if (debug)
+   {
+      dualgrad->HostRead();
+      out << "  ||dualgrad|| = " << dualgrad->Norml2() << std::endl;
+   }
    if (parallel)
    {
 #ifdef MFEM_USE_MPI
       static_cast<ParLinearForm*>(dualgrad.get())->ParallelAssemble(res_lambda);
+      if (debug)
+      {
+         res_lambda.HostRead();
+         out << "  ||ParAssemble(dualgrad)|| = " << res_lambda.Norml2() << std::endl;
+      }
       res_lambda.Neg();
       B.AddMult(u, res_lambda);
+      if (debug)
+      {
+         res_lambda.HostRead();
+         out << "  ||B*u - dualgrad|| = " << res_lambda.Norml2() << std::endl;
+      }
 #endif
    }
    else
