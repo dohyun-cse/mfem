@@ -20,7 +20,6 @@
 // [ M, grad R^* ] [ lambda ] = [0]
 //
 #include "mfem.hpp"
-#include <cstdlib>
 #include <iostream>
 #include "bregman.hpp"
 #include "pg.hpp"
@@ -30,7 +29,6 @@ using namespace mfem;
 real_t spherical_obstacle(const Vector &x);
 real_t exact_solution_obstacle(const Vector &x);
 
-
 int main(int argc, char *argv[])
 {
    // 1. Initialize MPI and HYPRE.
@@ -39,6 +37,8 @@ int main(int argc, char *argv[])
    int myid = Mpi::WorldRank();
    MPI_Comm comm = MPI_COMM_WORLD;
    Hypre::Init();
+   OutStream pout(std::cout);
+   if (myid != 0) { pout.Disable(); }
 
    // 1. Parse command-line options.
    // const char *mesh_file = "";
@@ -50,6 +50,7 @@ int main(int argc, char *argv[])
    bool use_cudss = false;
    real_t primal_tol = 1e-08;
    real_t dual_tol = 1e-08;
+   bool debug = false;
 
    OptionsParser args(argc, argv);
    // args.AddOption(&mesh_file, "-m", "--mesh",
@@ -58,9 +59,9 @@ int main(int argc, char *argv[])
                   "Finite element order (polynomial degree) or -1 for"
                   " isoparametric space.");
    args.AddOption(&ser_ref_levels, "-sr", "--ser-refine",
-                  "Number of times to refine the mesh uniformly (serial)");
+                  "Number of times to serially refine the mesh uniformly.");
    args.AddOption(&par_ref_levels, "-pr", "--par-refine",
-                  "Number of times to refine the mesh uniformly (parallel)");
+                  "Number of times to parallely refine the mesh uniformly.");
    args.AddOption(&device_config, "-d", "--device",
                   "Device configuration string, see Device::Configure().");
    args.AddOption(&use_cudss, "-cudss", "--cudss-solver", "-no-cudss",
@@ -68,18 +69,15 @@ int main(int argc, char *argv[])
    args.AddOption(&visualization, "-vis", "--visualization", "-no-vis",
                   "--no-visualization",
                   "Enable or disable GLVis visualization.");
-   args.Parse();
-   if (!args.Good())
-   {
-      args.PrintUsage(cout);
-      return 1;
-   }
-   args.PrintOptions(cout);
+   args.AddOption(&debug, "-db", "--debug", "-no-debug", "--no-debug",
+                  "Enable or disable debug output.");
+   args.ParseCheck();
 
    // 2. Enable hardware devices such as GPUs, and programming models such as
    //    CUDA, OCCA, RAJA and OpenMP based on command line options.
    Device device(device_config);
    device.Print();
+   MemoryType mt = device.GetMemoryType();
 
    // 3. Read the mesh from the given mesh file. We can handle triangular,
    //    quadrilateral, tetrahedral, hexahedral, surface and volume meshes with
@@ -87,17 +85,12 @@ int main(int argc, char *argv[])
    // Mesh mesh(mesh_file, 1, 1);
    Mesh ser_mesh = Mesh::MakeCartesian2D(10, 10, Element::QUADRILATERAL);
    ser_mesh.Transform([](const Vector &x, Vector &y) { y = x; y *= 2.0; y -= 1.0; });
-   int dim = ser_mesh.Dimension();
-   for (int l = 0; l < ser_ref_levels; l++)
-   {
-      ser_mesh.UniformRefinement();
-   }
-   ParMesh mesh(MPI_COMM_WORLD, ser_mesh);
-   ser_mesh.Clear();
-   for (int l = 0; l < par_ref_levels; l++)
-   {
-      mesh.UniformRefinement();
-   }
+   for (int l = 0; l < ser_ref_levels; l++) { ser_mesh.UniformRefinement(); }
+
+   ParMesh mesh(comm, ser_mesh); ser_mesh.Clear();
+   for (int l = 0; l < par_ref_levels; l++) { mesh.UniformRefinement(); }
+
+   int dim = mesh.Dimension();
 
    FunctionCoefficient obstacle(spherical_obstacle);
    FunctionCoefficient u_ex(exact_solution_obstacle);
@@ -110,11 +103,8 @@ int main(int argc, char *argv[])
    ParFiniteElementSpace primal_fes(&mesh, &primal_fec);
    ParFiniteElementSpace latent_fes(&mesh, &latent_fec);
 
-   auto ndof = primal_fes.GlobalTrueVSize() + latent_fes.GlobalTrueVSize();
-   if (myid == 0)
-   {
-      cout << "Number of finite element unknowns: " << ndof << endl;
-   }
+   auto dofs = primal_fes.GlobalTrueVSize() + latent_fes.GlobalTrueVSize();
+   pout << "Number of finite element unknowns: " << dofs << endl;
 
    // 6. Determine the list of true (i.e. conforming) essential boundary dofs.
    //    In this example, the boundary conditions are defined by marking all
@@ -122,14 +112,14 @@ int main(int argc, char *argv[])
    //    and converting them to a list of true dofs.
    Array<int> ess_bdr(mesh.bdr_attributes.Size() ? mesh.bdr_attributes.Max() : 0);
    ess_bdr = 1;
-   Array<int> ess_tdof_list;
-   primal_fes.GetEssentialTrueDofs(ess_bdr, ess_tdof_list);
+   Array<int> ess_tdofs;
+   primal_fes.GetEssentialTrueDofs(ess_bdr, ess_tdofs);
 
-   Array<int> offsets(3);
-   offsets[0] = 0;
-   offsets[1] = primal_fes.GetVSize(); // u
-   offsets[2] = latent_fes.GetVSize(); // lambda
-   offsets.PartialSum();
+   Array<int> loffsets(3);
+   loffsets[0] = 0;
+   loffsets[1] = primal_fes.GetVSize(); // u
+   loffsets[2] = latent_fes.GetVSize(); // lambda
+   loffsets.PartialSum();
 
    Array<int> toffsets(3);
    toffsets[0] = 0;
@@ -137,14 +127,16 @@ int main(int argc, char *argv[])
    toffsets[2] = latent_fes.GetTrueVSize(); // lambda
    toffsets.PartialSum();
 
-   BlockVector X(offsets), F(offsets), Xk(offsets);
-   BlockVector tX(toffsets), tF(toffsets);
-   X = 0.0; F = 0.0;
-   tX = 0.0; tF = 0.0;
+   BlockVector X(loffsets, mt), F(loffsets, mt), Xk(loffsets, mt);
+   BlockVector tX(toffsets, mt), tF(toffsets, mt);
+   X = 0.0; F = 0.0; tX = 0.0; tF = 0.0;
+
    ParGridFunction u(&primal_fes, X.GetBlock(0));
    ParGridFunction u_k(&primal_fes, Xk.GetBlock(0));
    u.ProjectBdrCoefficient(u_ex, ess_bdr);
+   X.SyncFromBlocks();
    u.GetTrueDofs(tX.GetBlock(0));
+   tX.SyncFromBlocks();
    ParGridFunction lambda(&latent_fes, X.GetBlock(1));
    ParGridFunction lambda_k(&latent_fes, Xk.GetBlock(1));
 
@@ -153,37 +145,39 @@ int main(int argc, char *argv[])
    ParBilinearForm diffusion(&primal_fes);
    diffusion.AddDomainIntegrator(new DiffusionIntegrator);
    diffusion.Assemble();
-   HypreParMatrix A;
-   diffusion.FormSystemMatrix(ess_tdof_list, A);
-   diffusion.ParallelEliminateTDofsInRHS(ess_tdof_list, tX.GetBlock(0),
+   OperatorHandle A_h;
+   diffusion.FormSystemMatrix(ess_tdofs, A_h);
+   diffusion.ParallelEliminateTDofsInRHS(ess_tdofs, tX.GetBlock(0),
                                          tF.GetBlock(0));
 
    ParMixedBilinearForm mass(&primal_fes, &latent_fes);
    mass.AddDomainIntegrator(new MassIntegrator);
    mass.Assemble();
-   HypreParMatrix B;
+   OperatorHandle B_h;
    Array<int> dummy(0);
-   mass.FormRectangularSystemMatrix(ess_tdof_list, dummy, B);
-   mass.ParallelEliminateTrialTDofsInRHS(ess_tdof_list, tX.GetBlock(0),
+   mass.FormRectangularSystemMatrix(ess_tdofs, dummy, B_h);
+   mass.ParallelEliminateTrialTDofsInRHS(ess_tdofs, tX.GetBlock(0),
                                          tF.GetBlock(1));
 
    ConstantCoefficient one_cf(1.0);
    CoefficientScaledLegendreFunction entropy(new Shannon, one_cf, obstacle);
    real_t alpha=1.0;
-   PGOperator pg_op(A, B, latent_fes, entropy, alpha);
+   PGOperator pg_op(*A_h.As<HypreParMatrix>(), *B_h.As<HypreParMatrix>(),
+                    latent_fes, entropy, alpha);
+   pg_op.SetDebug(debug);
 
    std::unique_ptr<Solver> linear_solver;
    if (use_cudss && Device::Allows(Backend::CUDA_MASK))
    {
 #ifdef MFEM_USE_CUDSS
-      auto * cudss_solver = new CuDSSSolver(comm);
-      // cudss_solver->SetReorderingReuse(true);
+      auto * cudss_solver = new CuDSSSolver;
+      cudss_solver->SetReorderingReuse(true);
       linear_solver.reset(cudss_solver);
 #endif
    }
    else
    {
-#ifdef MFEM_USE_MUMPS
+#ifdef MFEM_USE_PETSC
       linear_solver.reset(new MUMPSSolver(comm));
 #else
       MFEM_ABORT("Either GPU or SuiteSparse must be enabled");
@@ -211,24 +205,26 @@ int main(int argc, char *argv[])
    pg_solver.SetSolver(*linear_solver);
    pg_solver.SetOperator(pg_op);
 
+   real_t err0 = u.ComputeL2Error(u_ex);
+   pout << "Initial L2 error: " << err0 << endl;
    for (int i=0; i<100; i++)
    {
       Xk = X;
+      Xk.HostRead();
       pg_solver.Mult(tF, tX);
+      tX.HostRead();
       u.SetFromTrueDofs(tX.GetBlock(0));
       lambda.SetFromTrueDofs(tX.GetBlock(1));
-      if (myid == 0)
-      {
-         out << "PG iteration " << i << ", Newton it: " << pg_solver.GetNumIterations()
-             << ", residual norm: " << pg_solver.GetFinalNorm() << endl;
-      }
+      X.SyncFromBlocks();
+      X.HostRead();
+      pout << "PG iteration " << i << ", Newton it: " << pg_solver.GetNumIterations()
+           << ", residual norm: " << pg_solver.GetFinalNorm() << endl;
       real_t primal_diff = u_k.ComputeL2Error(u_cf);
       real_t dual_diff = lambda_k.ComputeL1Error(lambda_cf);
-      if (myid == 0)
-      {
-         out << "   primal diff = " << primal_diff
-             << ", dual diff = " << dual_diff << endl;
-      }
+      real_t primal_err = u.ComputeL2Error(u_ex);
+      pout << "   primal diff = " << primal_diff
+           << ", primal error = " << primal_err
+           << ", dual diff = " << dual_diff << endl;
       if (primal_diff < primal_tol && dual_diff < dual_tol)
       {
          break;
@@ -239,12 +235,11 @@ int main(int argc, char *argv[])
          *sol_sock << "parallel " << num_procs << " " << myid << "\n";
          *sol_sock << "solution\n" << mesh << u << flush;
       }
+      alpha *= 1.5;
    }
    real_t err = u.ComputeL2Error(u_ex);
-   if (myid == 0)
-   {
-      cout << "L2 error: " << err << endl;
-   }
+   pout << "L2 error: " << err << endl;
+
    return EXIT_SUCCESS;
 }
 

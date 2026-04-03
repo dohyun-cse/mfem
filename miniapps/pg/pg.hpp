@@ -20,14 +20,11 @@ private:
    std::unique_ptr<GridFunction> psi;
    std::unique_ptr<BilinearForm> dualhess;
    std::unique_ptr<LinearForm> dualgrad;
-   mutable std::unique_ptr<SparseMatrix> pg_op;
+   mutable OperatorHandle H;
+   mutable OperatorHandle pg_op;
    mutable Array<int> latent_ess_tdof;
    Array<int> offsets;
    bool parallel = false;
-#ifdef MFEM_USE_MPI
-   mutable std::unique_ptr<HypreParMatrix> dualH;
-   mutable std::unique_ptr<HypreParMatrix> pg_op_par;
-#endif
 
 public:
    void SetDebug(bool debug_) { debug = debug_; }

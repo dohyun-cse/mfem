@@ -59,13 +59,7 @@ int main(int argc, char *argv[])
                   "Enable or disable GLVis visualization.");
    args.AddOption(&debug, "-db", "--debug", "-no-debug", "--no-debug",
                   "Enable or disable debug output.");
-   args.Parse();
-   if (!args.Good())
-   {
-      args.PrintUsage(cout);
-      return 1;
-   }
-   args.PrintOptions(cout);
+   args.ParseCheck();
 
    // 2. Enable hardware devices such as GPUs, and programming models such as
    //    CUDA, OCCA, RAJA and OpenMP based on command line options.
@@ -190,20 +184,20 @@ int main(int argc, char *argv[])
 
    real_t err0 = u.ComputeL2Error(u_ex);
    cout << "Initial L2 error: " << err0 << endl;
-   for (int i=0; i<1; i++)
+   for (int i=0; i<100; i++)
    {
       Xk = X;
       Xk.HostRead();
       pg_solver.Mult(F, X);
       X.HostRead();
-      out << "PG iteration " << i << ", Newton it: " << pg_solver.GetNumIterations()
-          << ", residual norm: " << pg_solver.GetFinalNorm() << endl;
+      cout << "PG iteration " << i << ", Newton it: " << pg_solver.GetNumIterations()
+           << ", residual norm: " << pg_solver.GetFinalNorm() << endl;
       real_t primal_diff = u_k.ComputeL2Error(u_cf);
       real_t dual_diff = lambda_k.ComputeL1Error(lambda_cf);
       real_t primal_err = u.ComputeL2Error(u_ex);
-      out << "   primal diff = " << primal_diff
-          << ", primal error = " << primal_err
-          << ", dual diff = " << dual_diff << endl;
+      cout << "   primal diff = " << primal_diff
+           << ", primal error = " << primal_err
+           << ", dual diff = " << dual_diff << endl;
       if (primal_diff < primal_tol && dual_diff < dual_tol)
       {
          break;
@@ -213,12 +207,11 @@ int main(int argc, char *argv[])
       {
          *sol_sock << "solution\n" << mesh << u << flush;
       }
+      alpha *= 2.0;
    }
    real_t err = u.ComputeL2Error(u_ex);
    cout << "L2 error: " << err << endl;
-   
-   cout << "A: " << A.ReadI() << ", " << A.ReadJ() << ", " << A.ReadData() << std::endl;
-   cout << "B: " << B.ReadI() << ", " << B.ReadJ() << ", " << B.ReadData() << std::endl;
+
    return EXIT_SUCCESS;
 }
 

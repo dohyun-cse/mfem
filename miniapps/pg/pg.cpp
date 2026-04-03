@@ -53,6 +53,7 @@ PGOperator::PGOperator(Operator &A_,
    pg_blockmat->SetBlock(0, 1, static_cast<SparseMatrix*>(neg_Bt.get()));
    pg_blockmat->SetBlock(1, 0, static_cast<SparseMatrix*>(&B));
    pg_blockmat->owns_blocks = false;
+   H.SetType(Operator::MFEM_SPARSEMAT);
 }
 
 #ifdef MFEM_USE_MPI
@@ -104,6 +105,7 @@ PGOperator::PGOperator(Operator &A_,
    dualhess->AddDomainIntegrator(new MassIntegrator(*primal_jacobian_cf));
 
    parallel = true;
+   H.SetType(Operator::Hypre_ParCSR);
 }
 #endif
 
@@ -175,30 +177,27 @@ Operator &PGOperator::GetGradient(const Vector &x) const
    if (debug) {out << "PGOperator::GetGradient #2: update dual Hessian" << std::endl; }
    dualhess->Assemble(false);
    dualhess->SpMat() *= alpha;
+   dualhess->FormSystemMatrix(latent_ess_tdof, H);
+
+   if (debug) {out << "PGOperator::GetGradient #3: creating monolithic" << std::endl; }
    if (parallel)
    {
 #ifdef MFEM_USE_MPI
-      dualH.reset(new HypreParMatrix);
-      dualhess->FormSystemMatrix(latent_ess_tdof, *dualH);
-
-      if (debug) {out << "PGOperator::GetGradient #3: setup gradient operator" << std::endl; }
       Array2D<const HypreParMatrix*> blocks(2, 2);
       blocks(0, 0) = static_cast<const HypreParMatrix*>(&A);
       blocks(0, 1) = static_cast<const HypreParMatrix*>(neg_Bt.get());
       blocks(1, 0) = static_cast<const HypreParMatrix*>(&B);
-      blocks(1, 1) = dualH.get();
-      pg_op_par.reset(HypreParMatrixFromBlocks(blocks));
-      if (debug) {out << "PGOperator::GetGradient done" << std::endl; }
-      return *pg_op_par;
+      blocks(1, 1) = H.As<HypreParMatrix>();
+      pg_op.Reset(HypreParMatrixFromBlocks(blocks));
 #endif
    }
-   if (debug) {out << "PGOperator::GetGradient #3: setup gradient operator" << std::endl; }
-   // serial
-   OperatorHandle H;
-   dualhess->FormSystemMatrix(latent_ess_tdof, H);
-   pg_blockmat->SetBlock(1, 1, H.As<SparseMatrix>());
-   pg_op.reset(pg_blockmat->CreateMonolithic());
-   dualhess->Update();
+   else
+   {
+      // serial
+      pg_blockmat->SetBlock(1, 1, H.As<SparseMatrix>());
+      pg_op.Reset(pg_blockmat->CreateMonolithic());
+   }
+   dualhess->Update(); // no longer needed after this.
    if (debug) {out << "PGOperator::GetGradient done" << std::endl; }
    return *pg_op;
 }
