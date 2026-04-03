@@ -577,6 +577,8 @@ SparseMatrix * BlockMatrix::CreateMonolithic() const
             MemoryType d_mt_curr = Aij(i,j)->GetMemoryI().GetDeviceMemoryType();
             if (i_amono.Empty())
             {
+               out << "Memory types: " << MemoryTypeName[(int)h_mt_curr] << " (host), "
+                   << MemoryTypeName[(int)d_mt_curr] << " (device)" << std::endl;
                h_mt = h_mt_curr;
                d_mt = d_mt_curr;
                i_amono.New(row_offsets[nRowBlocks]+2, h_mt, d_mt);
