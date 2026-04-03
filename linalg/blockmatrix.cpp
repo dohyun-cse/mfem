@@ -565,9 +565,9 @@ SparseMatrix * BlockMatrix::CreateMonolithic() const
    int * j_amono = nullptr;
    real_t * data = nullptr;
    MemoryType h_mt, d_mt;
-   for (int i=0; i<nRowBlocks + 1; i++)
+   for (int i=0; i<nRowBlocks; i++)
    {
-      for (int j=0; j<nColBlocks + 1; j++)
+      for (int j=0; j<nColBlocks; j++)
       {
          if (Aij(i,j) != NULL)
          {
