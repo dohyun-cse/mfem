@@ -561,9 +561,14 @@ SparseMatrix * BlockMatrix::CreateMonolithic() const
 {
    int nnz = NumNonZeroElems();
 
-   int * i_amono = new int[row_offsets[nRowBlocks]+2]();
-   int * j_amono = new int[nnz];
-   real_t * data = new real_t[nnz];
+   int * i_amono = Memory<int>(row_offsets[nRowBlocks]+2);
+   int * j_amono = Memory<int>(nnz);
+   real_t * data = Memory<real_t>(nnz);
+
+   for (int i = 0; i < row_offsets[nRowBlocks]+2; i++)
+   {
+      i_amono[i] = 0;
+   }
 
    int * i_amono_construction = i_amono+1;
 
@@ -576,10 +581,8 @@ SparseMatrix * BlockMatrix::CreateMonolithic() const
          for (int jblock = 0; jblock < nColBlocks; ++jblock)
          {
             if (Aij(iblock,jblock) != NULL)
-            {
-               const int *blk_I = Aij(iblock, jblock)->HostReadI();
-               ind += blk_I[local_row+1] - blk_I[local_row];
-            }
+               ind += Aij(iblock, jblock)->GetI()[local_row+1]
+                      - Aij(iblock, jblock)->GetI()[local_row];
          }
          i_amono_construction[irow+1] = ind;
       }
@@ -593,9 +596,9 @@ SparseMatrix * BlockMatrix::CreateMonolithic() const
          if (Aij(iblock,jblock) != NULL)
          {
             int nrow = row_offsets[iblock+1]-row_offsets[iblock];
-            const int * i_aij = Aij(iblock, jblock)->HostReadI();
-            const int * j_aij = Aij(iblock, jblock)->HostReadJ();
-            const real_t * data_aij = Aij(iblock, jblock)->HostReadData();
+            int * i_aij = Aij(iblock, jblock)->GetI();
+            int * j_aij = Aij(iblock, jblock)->GetJ();
+            real_t * data_aij = Aij(iblock, jblock)->GetData();
             int *i_it = i_amono_construction+row_offsets[iblock];
 
             int loc_start_index = 0;
@@ -603,7 +606,7 @@ SparseMatrix * BlockMatrix::CreateMonolithic() const
             int glob_start_index = 0;
 
             int shift(col_offsets[jblock]);
-            for (const int * i_it_aij(i_aij+1); i_it_aij != i_aij+nrow+1; ++i_it_aij)
+            for (int * i_it_aij(i_aij+1); i_it_aij != i_aij+nrow+1; ++i_it_aij)
             {
                glob_start_index = *i_it;
 

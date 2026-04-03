@@ -137,9 +137,9 @@ SparseMatrix::SparseMatrix(int *i, int *j, real_t *data, int m, int n)
      At(NULL),
      isSorted(false)
 {
-   I.Wrap(i, height+1, MemoryType::HOST, true);
-   J.Wrap(j, I[height], MemoryType::HOST, true);
-   A.Wrap(data, I[height], MemoryType::HOST, true);
+   I.Wrap(i, height+1, true);
+   J.Wrap(j, I[height], true);
+   A.Wrap(data, I[height], true);
 
 #ifdef MFEM_USE_MEMALLOC
    NodesMem = NULL;
@@ -1286,7 +1286,7 @@ void SparseMatrix::Threshold(real_t tol, bool fix_empty_rows)
    int *newI, *newJ;
    int i, j, nz;
 
-   newI = new int[height+1];
+   newI = Memory<int>(height+1);
    newI[0] = 0;
    for (i = 0, nz = 0; i < height; i++)
    {
@@ -1301,8 +1301,8 @@ void SparseMatrix::Threshold(real_t tol, bool fix_empty_rows)
       newI[i+1] = nz;
    }
 
-   newJ = new int[nz];
-   newA = new real_t[nz];
+   newJ = Memory<int>(nz);
+   newA = Memory<real_t>(nz);
    // Assume we're sorted until we find out otherwise
    isSorted = true;
    for (i = 0, nz = 0; i < height; i++)
@@ -1459,7 +1459,7 @@ void SparseMatrix::GetBlocks(Array2D<SparseMatrix *> &blocks) const
    {
       for (int i = 0; i < br; i++)
       {
-         int *bI = new int[nr + 1];
+         int *bI = Memory<int>(nr + 1);
          for (int k = 0; k <= nr; k++)
          {
             bI[k] = 0;
@@ -3640,9 +3640,9 @@ SparseMatrix *Transpose (const SparseMatrix &A)
    A_j    = A.HostReadJ();
    A_data = A.HostReadData();
 
-   At_i = new int[n+1];
-   At_j = new int[nnz];
-   At_data = new real_t[nnz];
+   At_i = Memory<int>(n+1);
+   At_j = Memory<int>(nnz);
+   At_data = Memory<real_t>(nnz);
 
    for (i = 0; i <= n; i++)
    {
@@ -3711,9 +3711,9 @@ SparseMatrix *TransposeAbstractSparseMatrix (const AbstractSparseMatrix &A,
    }
    nnz = A.NumNonZeroElems();
 
-   At_i = new int[n+1];
-   At_j = new int[nnz];
-   At_data = new real_t[nnz];
+   At_i = Memory<int>(n+1);
+   At_j = Memory<int>(nnz);
+   At_data = Memory<real_t>(nnz);
 
    for (i = 0; i <= n; i++)
    {
@@ -3792,7 +3792,7 @@ SparseMatrix *Mult (const SparseMatrix &A, const SparseMatrix &B,
 
    if (OAB == NULL)
    {
-      C_i = new int[nrowsA+1];
+      C_i = Memory<int>(nrowsA+1);
 
       C_i[0] = num_nonzeros = 0;
       for (ic = 0; ic < nrowsA; ic++)
@@ -3813,8 +3813,8 @@ SparseMatrix *Mult (const SparseMatrix &A, const SparseMatrix &B,
          C_i[ic+1] = num_nonzeros;
       }
 
-      C_j    = new int[num_nonzeros];
-      C_data = new real_t[num_nonzeros];
+      C_j    = Memory<int>(num_nonzeros);
+      C_data = Memory<real_t>(num_nonzeros);
 
       C = new SparseMatrix(C_i, C_j, C_data, nrowsA, ncolsB);
 
@@ -3917,7 +3917,7 @@ SparseMatrix *MultAbstractSparseMatrix (const AbstractSparseMatrix &A,
       B_marker[ib] = -1;
    }
 
-   C_i = new int[nrowsA+1];
+   C_i = Memory<int>(nrowsA+1);
 
    C_i[0] = num_nonzeros = 0;
 
@@ -3943,8 +3943,8 @@ SparseMatrix *MultAbstractSparseMatrix (const AbstractSparseMatrix &A,
       C_i[ic+1] = num_nonzeros;
    }
 
-   C_j    = new int[num_nonzeros];
-   C_data = new real_t[num_nonzeros];
+   C_j    = Memory<int>(num_nonzeros);
+   C_data = Memory<real_t>(num_nonzeros);
 
    C = new SparseMatrix(C_i, C_j, C_data, nrowsA, ncolsB);
 
@@ -4070,7 +4070,7 @@ SparseMatrix * Add(real_t a, const SparseMatrix & A, real_t b,
    int nrows = A.Height();
    int ncols = A.Width();
 
-   int * C_i = new int[nrows+1];
+   int * C_i = Memory<int>(nrows+1);
    int * C_j;
    real_t * C_data;
 
@@ -4083,6 +4083,7 @@ SparseMatrix * Add(real_t a, const SparseMatrix & A, real_t b,
    const real_t *B_data = B.HostReadData();
 
    int * marker = new int[ncols];
+   std::fill(marker, marker+ncols, -1);
 
    int num_nonzeros = 0, jcol;
    C_i[0] = 0;
@@ -4106,8 +4107,8 @@ SparseMatrix * Add(real_t a, const SparseMatrix & A, real_t b,
       C_i[ic+1] = num_nonzeros;
    }
 
-   C_j = new int[num_nonzeros];
-   C_data = new real_t[num_nonzeros];
+   C_j = Memory<int>(num_nonzeros);
+   C_data = Memory<real_t>(num_nonzeros);
 
    for (int ia = 0; ia < ncols; ia++)
    {

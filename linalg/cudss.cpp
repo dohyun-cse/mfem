@@ -431,20 +431,15 @@ void CuDSSSolver::ArrayMult(const Array<const Vector *> &X,
 {
    SetNumRHS(X.Size());
 
+   Vector RHS, SOL;
+
    if (nrhs == 1)
    {
-      MFEM_CUDSS_CHECK(cudssMatrixSetValues(
-                           xc, const_cast<real_t *>(X[0]->Read())));
-      MFEM_CUDSS_CHECK(cudssMatrixSetValues(yc, Y[0]->Write()));
-
-      // Solve
-      MFEM_CUDSS_CHECK(cudssExecute(handle, CUDSS_PHASE_SOLVE, solverConfig,
-                                    solverData, *Ac, yc, xc));
+      RHS.MakeRef(*(const_cast<Vector *>(X[0])), 0, X[0]->Size());
+      SOL.MakeRef(*Y[0], 0, Y[0]->Size());
    }
    else
    {
-      Vector RHS, SOL;
-
       // NOTE: RHS must have **global** num_rows and nrhs columns
       RHS.SetSize(nrhs * n_global, *X[0]);
       for (int i = 0; i < nrhs; i++)
@@ -455,15 +450,22 @@ void CuDSSSolver::ArrayMult(const Array<const Vector *> &X,
 
       // NOTE: SOL must have **global** num_rows and nrhs columns
       SOL.SetSize(nrhs * n_global, *Y[0]);
+   }
 
-      MFEM_CUDSS_CHECK(cudssMatrixSetValues(
-                           xc, const_cast<real_t *>(RHS.Read())));
-      MFEM_CUDSS_CHECK(cudssMatrixSetValues(yc, SOL.Write()));
+   MFEM_CUDSS_CHECK(cudssMatrixSetValues(xc, const_cast<real_t *>(RHS.Read())));
+   MFEM_CUDSS_CHECK(cudssMatrixSetValues(yc, SOL.Write()));
 
-      // Solve
-      MFEM_CUDSS_CHECK(cudssExecute(handle, CUDSS_PHASE_SOLVE, solverConfig,
-                                    solverData, *Ac, yc, xc));
+   // Solve
+   MFEM_CUDSS_CHECK(cudssExecute(handle, CUDSS_PHASE_SOLVE, solverConfig,
+                                 solverData, *Ac, yc, xc));
 
+   if (nrhs == 1)
+   {
+      SOL.SyncAliasMemory(*Y[0]);
+   }
+
+   if (nrhs > 1)
+   {
       // Get solution for each right-hand side
       for (int i = 0; i < nrhs; i++)
       {
