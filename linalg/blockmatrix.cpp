@@ -575,7 +575,7 @@ SparseMatrix * BlockMatrix::CreateMonolithic() const
          {
             MemoryType h_mt_curr = Aij(i,j)->GetMemoryI().GetHostMemoryType();
             MemoryType d_mt_curr = Aij(i,j)->GetMemoryI().GetDeviceMemoryType();
-            if (i_amono == nullptr)
+            if (i_amono.Empty())
             {
                h_mt = h_mt_curr;
                d_mt = d_mt_curr;
