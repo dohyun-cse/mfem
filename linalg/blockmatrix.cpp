@@ -587,6 +587,8 @@ SparseMatrix * BlockMatrix::CreateMonolithic() const
             }
             else
             {
+               out << "Memory types: " << MemoryTypeName[(int)h_mt_curr] << " (host), "
+                   << MemoryTypeName[(int)d_mt_curr] << " (device)" << std::endl;
                MFEM_VERIFY(h_mt == h_mt_curr && d_mt == d_mt_curr,
                            "BlockMatrix::CreateMonolithic: Inconsistent memory types at " << i << " " <<
                            j);
