@@ -172,14 +172,13 @@ Operator &PGOperator::GetGradient(const Vector &x) const
    psi->SetFromTrueVector();
 
    if (debug) {out << "PGOperator::GetGradient #2: update dual Hessian" << std::endl; }
-   dualhess->Update();
    dualhess->Assemble(false);
+   dualhess->SpMat() *= alpha;
    if (parallel)
    {
 #ifdef MFEM_USE_MPI
       dualH.reset(new HypreParMatrix);
       dualhess->FormSystemMatrix(latent_ess_tdof, *dualH);
-      *dualH *= alpha;
 
       if (debug) {out << "PGOperator::GetGradient #3: setup gradient operator" << std::endl; }
       Array2D<const HypreParMatrix*> blocks(2, 2);
@@ -196,10 +195,9 @@ Operator &PGOperator::GetGradient(const Vector &x) const
    // serial
    SparseMatrix H;
    dualhess->FormSystemMatrix(latent_ess_tdof, H);
-   H *= alpha;
    pg_blockmat->SetBlock(1, 1, &H);
    pg_op.reset(pg_blockmat->CreateMonolithic());
-   pg_op->Finalize();
+   dualhess->Update();
    if (debug) {out << "PGOperator::GetGradient done" << std::endl; }
    return *pg_op;
 }
