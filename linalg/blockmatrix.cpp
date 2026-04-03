@@ -586,7 +586,8 @@ SparseMatrix * BlockMatrix::CreateMonolithic() const
             else
             {
                MFEM_VERIFY(h_mt == h_mt_curr && d_mt == d_mt_curr,
-                           "BlockMatrix::CreateMonolithic: Inconsistent memory types");
+                           "BlockMatrix::CreateMonolithic: Inconsistent memory types at " << i << " " <<
+                           j);
             }
          }
       }
