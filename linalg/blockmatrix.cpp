@@ -633,6 +633,7 @@ SparseMatrix * BlockMatrix::CreateMonolithic() const
       }
    }
 
+   out << "DONE" << std::endl;
    return new SparseMatrix(i_amono, j_amono, data, row_offsets[nRowBlocks],
                            col_offsets[nColBlocks]);
 }
