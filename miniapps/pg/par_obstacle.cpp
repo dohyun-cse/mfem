@@ -213,7 +213,6 @@ int main(int argc, char *argv[])
       Xk = X;
       Xk.HostRead();
       pg_solver.Mult(tF, tX);
-      tX.HostRead();
       u.SetFromTrueDofs(tX.GetBlock(0));
       lambda.SetFromTrueDofs(tX.GetBlock(1));
       X.SyncFromBlocks();
