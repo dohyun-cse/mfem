@@ -170,7 +170,7 @@ int main(int argc, char *argv[])
    if (use_cudss && Device::Allows(Backend::CUDA_MASK))
    {
 #ifdef MFEM_USE_CUDSS
-      auto * cudss_solver = new CuDSSSolver;
+      auto * cudss_solver = new CuDSSSolver(comm);
       cudss_solver->SetReorderingReuse(true);
       linear_solver.reset(cudss_solver);
 #endif
