@@ -132,7 +132,6 @@ int main(int argc, char *argv[])
    SparseMatrix A;
    diffusion.FormSystemMatrix(ess_tdofs, A);
    diffusion.EliminateVDofsInRHS(ess_tdofs, u, F.GetBlock(0));
-   F.SyncFromBlocks();
 
    MixedBilinearForm mass(&primal_fes, &latent_fes);
    mass.AddDomainIntegrator(new MassIntegrator);
