@@ -21,7 +21,6 @@ private:
    std::unique_ptr<BilinearForm> dualhess;
    std::unique_ptr<LinearForm> dualgrad;
    mutable std::unique_ptr<SparseMatrix> pg_op;
-   mutable SparseMatrix dualH_serial;
    mutable Array<int> latent_ess_tdof;
    Array<int> offsets;
    bool parallel = false;
