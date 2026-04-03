@@ -561,24 +561,14 @@ SparseMatrix * BlockMatrix::CreateMonolithic() const
 {
    int nnz = NumNonZeroElems();
 
-   Memory<int> i_amono;
-   Memory<int> j_amono;
-   Memory<real_t> data;
-   MemoryType h_mt = MemoryType::HOST;
-   MemoryType d_mt = Device::GetDeviceMemoryType();
-   i_amono.New(row_offsets[nRowBlocks]+2, h_mt, d_mt);
-   j_amono.New(nnz, h_mt, d_mt);
-   data.New(nnz, h_mt, d_mt);
+   int * i_amono = Memory<int>(row_offsets[nRowBlocks]+2);
+   int * j_amono = Memory<int>(nnz);
+   real_t * data = Memory<real_t>(nnz);
+
    for (int i = 0; i < row_offsets[nRowBlocks]+2; i++)
    {
       i_amono[i] = 0;
    }
-   Array2D<const int*> Aij_I(nRowBlocks,nColBlocks);
-   Aij_I = (const int*)NULL;
-   Array2D<const int*> Aij_J(nRowBlocks,nColBlocks);
-   Aij_J = (const int*)NULL;
-   Array2D<const real_t*> Aij_Data(nRowBlocks,nColBlocks);
-   Aij_Data = (const real_t*)NULL;
 
    int * i_amono_construction = i_amono+1;
 
@@ -591,13 +581,8 @@ SparseMatrix * BlockMatrix::CreateMonolithic() const
          for (int jblock = 0; jblock < nColBlocks; ++jblock)
          {
             if (Aij(iblock,jblock) != NULL)
-            {
-               Aij_I(iblock, jblock) = Aij(iblock, jblock)->ReadI();
-               Aij_J(iblock, jblock) = Aij(iblock, jblock)->ReadJ();
-               Aij_Data(iblock, jblock) = Aij(iblock, jblock)->ReadData();
-               ind += Aij_I(iblock, jblock)[local_row+1]
-                      - Aij_I(iblock, jblock)[local_row];
-            }
+               ind += Aij(iblock, jblock)->GetI()[local_row+1]
+                      - Aij(iblock, jblock)->GetI()[local_row];
          }
          i_amono_construction[irow+1] = ind;
       }
@@ -611,9 +596,9 @@ SparseMatrix * BlockMatrix::CreateMonolithic() const
          if (Aij(iblock,jblock) != NULL)
          {
             int nrow = row_offsets[iblock+1]-row_offsets[iblock];
-            const int * i_aij = Aij_I(iblock, jblock);
-            const int * j_aij = Aij_J(iblock, jblock);
-            const real_t * data_aij = Aij_Data(iblock, jblock);
+            int * i_aij = Aij(iblock, jblock)->GetI();
+            int * j_aij = Aij(iblock, jblock)->GetJ();
+            real_t * data_aij = Aij(iblock, jblock)->GetData();
             int *i_it = i_amono_construction+row_offsets[iblock];
 
             int loc_start_index = 0;
@@ -621,7 +606,7 @@ SparseMatrix * BlockMatrix::CreateMonolithic() const
             int glob_start_index = 0;
 
             int shift(col_offsets[jblock]);
-            for (const int * i_it_aij = i_aij+1; i_it_aij != i_aij+nrow+1; ++i_it_aij)
+            for (int * i_it_aij(i_aij+1); i_it_aij != i_aij+nrow+1; ++i_it_aij)
             {
                glob_start_index = *i_it;
 
