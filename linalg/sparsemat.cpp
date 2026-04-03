@@ -4319,7 +4319,7 @@ void SparseMatrix::Swap(SparseMatrix &other)
 
 SparseMatrix::~SparseMatrix()
 {
-  out << "Sparse matrix destructor called" << std::endl;
+   out << "Sparse matrix destructor called" << std::endl;
    Destroy();
 #ifdef MFEM_USE_CUDA_OR_HIP
    if (Device::Allows(Backend::CUDA_MASK | Backend::HIP_MASK))
@@ -4351,7 +4351,7 @@ SparseMatrix::~SparseMatrix()
       SparseMatrixCount--;
    }
 #endif // MFEM_USE_CUDA_OR_HIP
-  out << "Destructor ends" << std::endl;
+   out << "Destructor ends" << std::endl;
 }
 
 }
