@@ -561,43 +561,14 @@ SparseMatrix * BlockMatrix::CreateMonolithic() const
 {
    int nnz = NumNonZeroElems();
 
-   out << "Creating monolithic matrix from block matrix: " << height << " x "
-       << width << ", nnz = " << nnz << std::endl;
    Memory<int> i_amono;
    Memory<int> j_amono;
    Memory<real_t> data;
-   MemoryType h_mt, d_mt;
-   for (int i=0; i<nRowBlocks; i++)
-   {
-      for (int j=0; j<nColBlocks; j++)
-      {
-         if (Aij(i,j) != NULL)
-         {
-            MemoryType h_mt_curr = Aij(i,j)->GetMemoryI().GetHostMemoryType();
-            MemoryType d_mt_curr = Aij(i,j)->GetMemoryI().GetDeviceMemoryType();
-            if (i_amono.Empty())
-            {
-               out << "Memory types: " << MemoryTypeName[(int)h_mt_curr] << " (host), "
-                   << MemoryTypeName[(int)d_mt_curr] << " (device)" << std::endl;
-               h_mt = h_mt_curr;
-               d_mt = d_mt_curr;
-               i_amono.New(row_offsets[nRowBlocks]+2, h_mt, d_mt);
-               j_amono.New(nnz, h_mt, d_mt);
-               data.New(nnz, h_mt, d_mt);
-            }
-            else
-            {
-               out << "Memory types: " << MemoryTypeName[(int)h_mt_curr] << " (host), "
-                   << MemoryTypeName[(int)d_mt_curr] << " (device)" << std::endl;
-               MFEM_VERIFY(h_mt == h_mt_curr && d_mt == d_mt_curr,
-                           "BlockMatrix::CreateMonolithic: Inconsistent memory types at " << i << " " <<
-                           j);
-            }
-         }
-      }
-   }
-   MFEM_VERIFY(!i_amono.Empty(),
-               "BlockMatrix::CreateMonolithic: All blocks are empty");
+   MemoryType h_mt = MemoryType::HOST;
+   MemoryType d_mt = Device::GetDeviceMemoryType();
+   i_amono.New(row_offsets[nRowBlocks]+2, h_mt, d_mt);
+   j_amono.New(nnz, h_mt, d_mt);
+   data.New(nnz, h_mt, d_mt);
    for (int i = 0; i < row_offsets[nRowBlocks]+2; i++)
    {
       i_amono[i] = 0;

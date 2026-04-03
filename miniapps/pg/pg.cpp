@@ -196,11 +196,6 @@ Operator &PGOperator::GetGradient(const Vector &x) const
    // serial
    dualhess->FormSystemMatrix(latent_ess_tdof, dualH_serial);
    dualH_serial *= alpha;
-   // Trigger device memory allocation to match other blocks (A, B, neg_Bt)
-   // which already have cuda memory from Mult() calls.
-   dualH_serial.ReadI();
-   dualH_serial.ReadJ();
-   dualH_serial.ReadData();
    pg_blockmat->SetBlock(1, 1, &dualH_serial);
    pg_op.reset(pg_blockmat->CreateMonolithic());
    pg_op->Finalize();
