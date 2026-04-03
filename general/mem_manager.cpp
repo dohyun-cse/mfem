@@ -1009,8 +1009,8 @@ void MemoryManager::Delete_(void *h_ptr, MemoryType h_mt, unsigned flags)
       { ctrl->Host(h_mt)->Dealloc(h_ptr); }
       if (owns_internal)
       {
-         // MFEM_ASSERT(mm.IsKnown(h_ptr), "ptr now known" << h_ptr);
-         // MFEM_ASSERT(h_mt == maps->memories.at(h_ptr).h_mt, "");
+         MFEM_ASSERT(mm.IsKnown(h_ptr), "");
+         MFEM_ASSERT(h_mt == maps->memories.at(h_ptr).h_mt, "");
          mm.Erase(h_ptr, owns_device);
       }
    }

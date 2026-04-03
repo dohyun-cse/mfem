@@ -9,51 +9,56 @@
 // terms of the BSD-3 license. We welcome feedback and contributions, see file
 // CONTRIBUTING.md for details.
 
-#include "blockmatrix.hpp"
 #include "../general/array.hpp"
 #include "../general/globals.hpp"
-#include "blockvector.hpp"
 #include "matrix.hpp"
 #include "sparsemat.hpp"
+#include "blockvector.hpp"
+#include "blockmatrix.hpp"
 #include <vector>
 
 namespace mfem
 {
 
-BlockMatrix::BlockMatrix(const Array<int> &offsets)
-   : AbstractSparseMatrix(offsets.Last()), owns_blocks(false),
-     nRowBlocks(offsets.Size() - 1), nColBlocks(offsets.Size() - 1),
-     Aij(nRowBlocks, nColBlocks)
+BlockMatrix::BlockMatrix(const Array<int> & offsets):
+   AbstractSparseMatrix(offsets.Last()),
+   owns_blocks(false),
+   nRowBlocks(offsets.Size()-1),
+   nColBlocks(offsets.Size()-1),
+   Aij(nRowBlocks, nColBlocks)
 {
-   row_offsets.MakeRef(const_cast<Array<int> &>(offsets));
-   col_offsets.MakeRef(const_cast<Array<int> &>(offsets));
+   row_offsets.MakeRef(const_cast< Array<int>& >(offsets));
+   col_offsets.MakeRef(const_cast< Array<int>& >(offsets));
    Aij = (SparseMatrix *)NULL;
 }
 
-BlockMatrix::BlockMatrix(const Array<int> &row_offsets_,
-                         const Array<int> &col_offsets_)
-   : AbstractSparseMatrix(row_offsets_.Last(), col_offsets_.Last()),
-     owns_blocks(false), nRowBlocks(row_offsets_.Size() - 1),
-     nColBlocks(col_offsets_.Size() - 1), Aij(nRowBlocks, nColBlocks)
+BlockMatrix::BlockMatrix(const Array<int> & row_offsets_,
+                         const Array<int> & col_offsets_):
+   AbstractSparseMatrix(row_offsets_.Last(), col_offsets_.Last()),
+   owns_blocks(false),
+   nRowBlocks(row_offsets_.Size()-1),
+   nColBlocks(col_offsets_.Size()-1),
+   Aij(nRowBlocks, nColBlocks)
 {
-   row_offsets.MakeRef(const_cast<Array<int> &>(row_offsets_));
-   col_offsets.MakeRef(const_cast<Array<int> &>(col_offsets_));
+   row_offsets.MakeRef(const_cast< Array<int>& >(row_offsets_));
+   col_offsets.MakeRef(const_cast< Array<int>& >(col_offsets_));
    Aij = (SparseMatrix *)NULL;
 }
+
 
 BlockMatrix::~BlockMatrix()
 {
    if (owns_blocks)
    {
-      for (SparseMatrix **it = Aij.GetRow(0);
-           it != Aij.GetRow(0) + (Aij.NumRows() * Aij.NumCols()); ++it)
+      for (SparseMatrix ** it = Aij.GetRow(0);
+           it != Aij.GetRow(0)+(Aij.NumRows()*Aij.NumCols()); ++it)
       {
          delete *it;
       }
    }
 }
 
-void BlockMatrix::SetBlock(int i, int j, SparseMatrix *mat)
+void BlockMatrix::SetBlock(int i, int j, SparseMatrix * mat)
 {
 #ifdef MFEM_DEBUG
    if (nRowBlocks <= i || nColBlocks <= j)
@@ -61,20 +66,20 @@ void BlockMatrix::SetBlock(int i, int j, SparseMatrix *mat)
       mfem_error("BlockMatrix::SetBlock #0");
    }
 
-   if (mat->Height() != row_offsets[i + 1] - row_offsets[i])
+   if (mat->Height() != row_offsets[i+1] - row_offsets[i])
    {
       mfem_error("BlockMatrix::SetBlock #1");
    }
 
-   if (mat->Width() != col_offsets[j + 1] - col_offsets[j])
+   if (mat->Width() != col_offsets[j+1] - col_offsets[j])
    {
       mfem_error("BlockMatrix::SetBlock #2");
    }
 #endif
-   Aij(i, j) = mat;
+   Aij(i,j) = mat;
 }
 
-SparseMatrix &BlockMatrix::GetBlock(int i, int j)
+SparseMatrix & BlockMatrix::GetBlock(int i, int j)
 {
 #ifdef MFEM_DEBUG
    if (nRowBlocks <= i || nColBlocks <= j)
@@ -82,15 +87,15 @@ SparseMatrix &BlockMatrix::GetBlock(int i, int j)
       mfem_error("BlockMatrix::Block #0");
    }
 
-   if (IsZeroBlock(i, j))
+   if (IsZeroBlock(i,j))
    {
       mfem_error("BlockMatrix::Block #1");
    }
 #endif
-   return *Aij(i, j);
+   return *Aij(i,j);
 }
 
-const SparseMatrix &BlockMatrix::GetBlock(int i, int j) const
+const SparseMatrix & BlockMatrix::GetBlock(int i, int j) const
 {
 #ifdef MFEM_DEBUG
    if (nRowBlocks <= i || nColBlocks <= j)
@@ -98,14 +103,15 @@ const SparseMatrix &BlockMatrix::GetBlock(int i, int j) const
       mfem_error("BlockMatrix::Block const #0");
    }
 
-   if (IsZeroBlock(i, j))
+   if (IsZeroBlock(i,j))
    {
       mfem_error("BlockMatrix::Block const #1");
    }
 #endif
 
-   return *Aij(i, j);
+   return *Aij(i,j);
 }
+
 
 int BlockMatrix::NumNonZeroElems() const
 {
@@ -114,16 +120,17 @@ int BlockMatrix::NumNonZeroElems() const
    {
       for (int irow = 0; irow != nRowBlocks; ++irow)
       {
-         if (Aij(irow, jcol))
+         if (Aij(irow,jcol))
          {
-            nnz_elem += Aij(irow, jcol)->NumNonZeroElems();
+            nnz_elem+= Aij(irow,jcol)->NumNonZeroElems();
          }
       }
    }
    return nnz_elem;
 }
 
-real_t &BlockMatrix::Elem(int i, int j)
+
+real_t& BlockMatrix::Elem (int i, int j)
 {
    int iloc, iblock;
    int jloc, jblock;
@@ -139,7 +146,7 @@ real_t &BlockMatrix::Elem(int i, int j)
    return Aij(iblock, jblock)->Elem(iloc, jloc);
 }
 
-const real_t &BlockMatrix::Elem(int i, int j) const
+const real_t& BlockMatrix::Elem (int i, int j) const
 {
    static const real_t zero = 0.0;
    int iloc, iblock;
@@ -152,8 +159,7 @@ const real_t &BlockMatrix::Elem(int i, int j) const
    {
       return zero;
    }
-   return static_cast<const SparseMatrix *>(Aij(iblock, jblock))
-          ->Elem(iloc, jloc);
+   return static_cast<const SparseMatrix *>(Aij(iblock, jblock))->Elem(iloc, jloc);
 }
 
 int BlockMatrix::RowSize(const int i) const
@@ -165,9 +171,9 @@ int BlockMatrix::RowSize(const int i) const
 
    for (int jblock = 0; jblock < nColBlocks; ++jblock)
    {
-      if (Aij(iblock, jblock) != NULL)
+      if (Aij(iblock,jblock) != NULL)
       {
-         rowsize += Aij(iblock, jblock)->RowSize(iloc);
+         rowsize += Aij(iblock,jblock)->RowSize(iloc);
       }
    }
 
@@ -185,14 +191,14 @@ int BlockMatrix::GetRow(const int row, Array<int> &cols, Vector &srow) const
    Array<int> bcols;
    Vector bsrow;
 
-   int *it_cols = cols.GetData();
+   int * it_cols = cols.GetData();
    real_t *it_srow = srow.GetData();
 
    for (int jblock = 0; jblock < nColBlocks; ++jblock)
    {
-      if (Aij(iblock, jblock) != NULL)
+      if (Aij(iblock,jblock) != NULL)
       {
-         Aij(iblock, jblock)->GetRow(iloc, bcols, bsrow);
+         Aij(iblock,jblock)->GetRow(iloc, bcols, bsrow);
          for (int i = 0; i < bcols.Size(); ++i)
          {
             *(it_cols++) = bcols[i] + col_offsets[jblock];
@@ -211,10 +217,7 @@ void BlockMatrix::EliminateRowCol(int rc, DiagonalPolicy dpolicy)
    for (iiblock = 0; iiblock < nRowBlocks; ++iiblock)
    {
       idx = rc - row_offsets[iiblock];
-      if (idx < 0)
-      {
-         break;
-      }
+      if (idx < 0 ) { break; }
    }
    iiblock--;
    idx = rc - row_offsets[iiblock];
@@ -225,7 +228,7 @@ void BlockMatrix::EliminateRowCol(int rc, DiagonalPolicy dpolicy)
 
    MFEM_ASSERT(row_offsets[iiblock] == col_offsets[iiblock],
                "BlockMatrix::EliminateRowCol: row_offsets["
-               << iiblock << "] != col_offsets[" << iiblock << "]");
+               << iiblock << "] != col_offsets["<<iiblock<<"]");
 
    MFEM_ASSERT(Aij(iiblock, iiblock),
                "BlockMatrix::EliminateRowCol: Null diagonal block");
@@ -233,31 +236,19 @@ void BlockMatrix::EliminateRowCol(int rc, DiagonalPolicy dpolicy)
    // Apply the constraint idx to the iiblock
    for (int jjblock = 0; jjblock < nRowBlocks; ++jjblock)
    {
-      if (iiblock == jjblock)
-      {
-         continue;
-      }
-      if (Aij(iiblock, jjblock))
-      {
-         Aij(iiblock, jjblock)->EliminateRow(idx);
-      }
+      if (iiblock == jjblock) { continue; }
+      if (Aij(iiblock,jjblock)) { Aij(iiblock,jjblock)->EliminateRow(idx); }
    }
    for (int jjblock = 0; jjblock < nRowBlocks; ++jjblock)
    {
-      if (iiblock == jjblock)
-      {
-         continue;
-      }
-      if (Aij(jjblock, iiblock))
-      {
-         Aij(jjblock, iiblock)->EliminateCol(idx);
-      }
+      if (iiblock == jjblock) { continue; }
+      if (Aij(jjblock,iiblock)) { Aij(jjblock,iiblock)->EliminateCol(idx); }
    }
-   Aij(iiblock, iiblock)->EliminateRowCol(idx, dpolicy);
+   Aij(iiblock, iiblock)->EliminateRowCol(idx,dpolicy);
 }
 
-void BlockMatrix::EliminateRowCol(Array<int> &ess_bc_dofs, Vector &sol,
-                                  Vector &rhs)
+void BlockMatrix::EliminateRowCol(Array<int> & ess_bc_dofs, Vector & sol,
+                                  Vector & rhs)
 {
    if (nRowBlocks != nColBlocks)
    {
@@ -268,8 +259,8 @@ void BlockMatrix::EliminateRowCol(Array<int> &ess_bc_dofs, Vector &sol,
    {
       if (row_offsets[iiblock] != col_offsets[iiblock])
       {
-         mfem::out << "BlockMatrix::EliminateRowCol: row_offsets[" << iiblock
-                   << "] != col_offsets[" << iiblock << "]\n";
+         mfem::out << "BlockMatrix::EliminateRowCol: row_offsets["
+                   << iiblock << "] != col_offsets["<<iiblock<<"]\n";
          mfem_error();
       }
    }
@@ -280,10 +271,10 @@ void BlockMatrix::EliminateRowCol(Array<int> &ess_bc_dofs, Vector &sol,
 
    for (int iiblock = 0; iiblock < nRowBlocks; ++iiblock)
    {
-      int dsize = row_offsets[iiblock + 1] - row_offsets[iiblock];
-      block_dofs.MakeRef(ess_bc_dofs.GetData() + row_offsets[iiblock], dsize);
-      block_sol.SetDataAndSize(sol.GetData() + row_offsets[iiblock], dsize);
-      block_rhs.SetDataAndSize(rhs.GetData() + row_offsets[iiblock], dsize);
+      int dsize = row_offsets[iiblock+1] - row_offsets[iiblock];
+      block_dofs.MakeRef(ess_bc_dofs.GetData()+row_offsets[iiblock], dsize);
+      block_sol.SetDataAndSize(sol.GetData()+row_offsets[iiblock], dsize);
+      block_rhs.SetDataAndSize(rhs.GetData()+row_offsets[iiblock], dsize);
 
       if (Aij(iiblock, iiblock))
       {
@@ -291,7 +282,7 @@ void BlockMatrix::EliminateRowCol(Array<int> &ess_bc_dofs, Vector &sol,
          {
             if (block_dofs[i])
             {
-               Aij(iiblock, iiblock)->EliminateRowCol(i, block_sol(i), block_rhs);
+               Aij(iiblock, iiblock)->EliminateRowCol(i,block_sol(i), block_rhs);
             }
          }
       }
@@ -320,75 +311,57 @@ void BlockMatrix::EliminateRowCol(Array<int> &ess_bc_dofs, Vector &sol,
          }
          if (jjblock != iiblock && Aij(jjblock, iiblock))
          {
-            block_rhs.SetDataAndSize(rhs.GetData() + row_offsets[jjblock],
-                                     row_offsets[jjblock + 1] -
-                                     row_offsets[jjblock]);
-            Aij(jjblock, iiblock)
-            ->EliminateCols(block_dofs, &block_sol, &block_rhs);
+            block_rhs.SetDataAndSize(rhs.GetData()+row_offsets[jjblock],
+                                     row_offsets[jjblock+1] - row_offsets[jjblock]);
+            Aij(jjblock, iiblock)->EliminateCols(block_dofs, &block_sol, &block_rhs);
          }
       }
    }
 }
 
-void BlockMatrix::EliminateRowCols(const Array<int> &vdofs, BlockMatrix *Ae,
+void BlockMatrix::EliminateRowCols(const Array<int> & vdofs, BlockMatrix *Ae,
                                    DiagonalPolicy dpolicy)
 {
-   MFEM_VERIFY(
-      Ae, "BlockMatrix::EliminateRowCols: Elimination matrix pointer is null");
+   MFEM_VERIFY(Ae,
+               "BlockMatrix::EliminateRowCols: Elimination matrix pointer is null");
    MFEM_VERIFY(nRowBlocks == nColBlocks,
                "BlockMatrix::EliminateRowCols supported only for"
                "nRowBlocks = nColBlocks");
 
    std::vector<Array<int>> cols(nRowBlocks);
    std::vector<Array<int>> rows(nRowBlocks);
-   SparseMatrix *tmp = nullptr;
+   SparseMatrix * tmp = nullptr;
 
    for (int k = 0; k < vdofs.Size(); k++)
    {
-      int vdof = (vdofs[k]) >= 0 ? vdofs[k] : -1 - vdofs[k];
+      int vdof = (vdofs[k]) >=0 ? vdofs[k] : -1 - vdofs[k];
       // find block
       int iblock, dof;
-      findGlobalCol(vdof, iblock, dof);
+      findGlobalCol(vdof,iblock,dof);
       cols[iblock].Append(dof);
-      tmp = &GetBlock(iblock, iblock);
+      tmp = &GetBlock(iblock,iblock);
       if (tmp)
       {
-         tmp->EliminateRowCol(dof, Ae->GetBlock(iblock, iblock), dpolicy);
+         tmp->EliminateRowCol(dof,Ae->GetBlock(iblock,iblock), dpolicy);
       }
    }
 
    // Eliminate col from off-diagonal blocks
-   for (int j = 0; j < nColBlocks; j++)
+   for (int j = 0; j<nColBlocks; j++)
    {
-      if (!cols[j].Size())
+      if (!cols[j].Size()) { continue; }
+      int blocksize = col_offsets[j+1] - col_offsets[j];
+      Array<int> colmarker(blocksize); colmarker = 0;
+      for (int i = 0; i < cols[j].Size(); i++) { colmarker[cols[j][i]] = 1; }
+      for (int i = 0; i<nRowBlocks; i++)
       {
-         continue;
-      }
-      int blocksize = col_offsets[j + 1] - col_offsets[j];
-      Array<int> colmarker(blocksize);
-      colmarker = 0;
-      for (int i = 0; i < cols[j].Size(); i++)
-      {
-         colmarker[cols[j][i]] = 1;
-      }
-      for (int i = 0; i < nRowBlocks; i++)
-      {
-         if (i == j)
-         {
-            continue;
-         }
-         tmp = &GetBlock(i, j);
-         if (tmp)
-         {
-            tmp->EliminateCols(colmarker, Ae->GetBlock(i, j));
-         }
+         if (i == j) { continue; }
+         tmp = &GetBlock(i,j);
+         if (tmp) { tmp->EliminateCols(colmarker,Ae->GetBlock(i,j)); }
          for (int k = 0; k < cols[j].Size(); k++)
          {
-            tmp = &GetBlock(j, i);
-            if (tmp)
-            {
-               tmp->EliminateRow(cols[j][k]);
-            }
+            tmp = &GetBlock(j,i);
+            if (tmp) { tmp->EliminateRow(cols[j][k]); }
          }
       }
    }
@@ -400,26 +373,26 @@ void BlockMatrix::EliminateZeroRows(const real_t threshold)
 
    for (int iblock = 0; iblock < nRowBlocks; ++iblock)
    {
-      if (Aij(iblock, iblock))
+      if (Aij(iblock,iblock))
       {
          real_t norm;
          for (int i = 0; i < Aij(iblock, iblock)->NumRows(); ++i)
          {
             norm = 0.;
             for (int jblock = 0; jblock < nColBlocks; ++jblock)
-               if (Aij(iblock, jblock))
+               if (Aij(iblock,jblock))
                {
-                  norm += Aij(iblock, jblock)->GetRowNorml1(i);
+                  norm += Aij(iblock,jblock)->GetRowNorml1(i);
                }
 
             if (norm <= threshold)
             {
                for (int jblock = 0; jblock < nColBlocks; ++jblock)
                {
-                  if (Aij(iblock, jblock))
+                  if (Aij(iblock,jblock))
                   {
-                     Aij(iblock, jblock)
-                     ->EliminateRow(i, (iblock == jblock) ? DIAG_ONE : DIAG_ZERO);
+                     Aij(iblock,jblock)->EliminateRow(
+                        i, (iblock==jblock) ? DIAG_ONE : DIAG_ZERO);
                   }
                }
             }
@@ -428,21 +401,20 @@ void BlockMatrix::EliminateZeroRows(const real_t threshold)
       else
       {
          real_t norm;
-         for (int i = 0; i < row_offsets[iblock + 1] - row_offsets[iblock]; ++i)
+         for (int i = 0; i < row_offsets[iblock+1] - row_offsets[iblock]; ++i)
          {
             norm = 0.;
             for (int jblock = 0; jblock < nColBlocks; ++jblock)
             {
-               if (Aij(iblock, jblock))
+               if (Aij(iblock,jblock))
                {
-                  norm += Aij(iblock, jblock)->GetRowNorml1(i);
+                  norm += Aij(iblock,jblock)->GetRowNorml1(i);
                }
             }
 
             MFEM_VERIFY(!(norm <= threshold), "diagonal block is NULL:"
-                        " iblock = "
-                        << iblock << ", i = " << i
-                        << ", norm = " << norm);
+                        " iblock = " << iblock << ", i = " << i << ", norm = "
+                        << norm);
          }
       }
    }
@@ -454,37 +426,31 @@ void BlockMatrix::Finalize(int skip_zeros, bool fix_empty_rows)
    {
       for (int jblock = 0; jblock < nColBlocks; ++jblock)
       {
-         if (!Aij(iblock, jblock))
+         if (!Aij(iblock,jblock)) { continue; }
+         if (!Aij(iblock,jblock)->Finalized())
          {
-            continue;
-         }
-         if (!Aij(iblock, jblock)->Finalized())
-         {
-            Aij(iblock, jblock)->Finalize(skip_zeros, fix_empty_rows);
+            Aij(iblock,jblock)->Finalize(skip_zeros, fix_empty_rows);
          }
       }
    }
 }
 
-void BlockMatrix::Mult(const Vector &x, Vector &y) const
+void BlockMatrix::Mult(const Vector & x, Vector & y) const
 {
    if (x.GetData() == y.GetData())
    {
       mfem_error("Error: x and y can't point to the same data \n");
    }
 
-   MFEM_ASSERT(width == x.Size(),
-               "Input vector size (" << x.Size() << ") must match matrix width ("
-               << width << ")");
-   MFEM_ASSERT(height == y.Size(), "Output vector size ("
-               << y.Size()
-               << ") must match matrix height ("
-               << height << ")");
+   MFEM_ASSERT(width == x.Size(), "Input vector size (" << x.Size()
+               << ") must match matrix width (" << width << ")");
+   MFEM_ASSERT(height == y.Size(), "Output vector size (" << y.Size()
+               << ") must match matrix height (" << height << ")");
    y = 0.;
    AddMult(x, y, 1.0);
 }
 
-void BlockMatrix::AddMult(const Vector &x, Vector &y, const real_t val) const
+void BlockMatrix::AddMult(const Vector & x, Vector & y, const real_t val) const
 {
    if (x.GetData() == y.GetData())
    {
@@ -496,15 +462,15 @@ void BlockMatrix::AddMult(const Vector &x, Vector &y, const real_t val) const
    for (int iblock = 0; iblock != nRowBlocks; ++iblock)
    {
       yblockview.SetDataAndSize(y.GetData() + row_offsets[iblock],
-                                row_offsets[iblock + 1] - row_offsets[iblock]);
+                                row_offsets[iblock+1] - row_offsets[iblock]);
 
       for (int jblock = 0; jblock != nColBlocks; ++jblock)
       {
          if (Aij(iblock, jblock) != NULL)
          {
-            xblockview.SetDataAndSize(x.GetData() + col_offsets[jblock],
-                                      col_offsets[jblock + 1] -
-                                      col_offsets[jblock]);
+            xblockview.SetDataAndSize(
+               x.GetData() + col_offsets[jblock],
+               col_offsets[jblock+1] - col_offsets[jblock]);
 
             Aij(iblock, jblock)->AddMult(xblockview, yblockview, val);
          }
@@ -512,7 +478,7 @@ void BlockMatrix::AddMult(const Vector &x, Vector &y, const real_t val) const
    }
 }
 
-void BlockMatrix::MultTranspose(const Vector &x, Vector &y) const
+void BlockMatrix::MultTranspose(const Vector & x, Vector & y) const
 {
    if (x.GetData() == y.GetData())
    {
@@ -523,7 +489,7 @@ void BlockMatrix::MultTranspose(const Vector &x, Vector &y) const
    AddMultTranspose(x, y, 1.0);
 }
 
-void BlockMatrix::AddMultTranspose(const Vector &x, Vector &y,
+void BlockMatrix::AddMultTranspose(const Vector & x, Vector & y,
                                    const real_t val) const
 {
    if (x.GetData() == y.GetData())
@@ -536,15 +502,15 @@ void BlockMatrix::AddMultTranspose(const Vector &x, Vector &y,
    for (int iblock = 0; iblock != nColBlocks; ++iblock)
    {
       yblockview.SetDataAndSize(y.GetData() + col_offsets[iblock],
-                                col_offsets[iblock + 1] - col_offsets[iblock]);
+                                col_offsets[iblock+1] - col_offsets[iblock]);
 
       for (int jblock = 0; jblock != nRowBlocks; ++jblock)
       {
          if (Aij(jblock, iblock) != NULL)
          {
-            xblockview.SetDataAndSize(x.GetData() + row_offsets[jblock],
-                                      row_offsets[jblock + 1] -
-                                      row_offsets[jblock]);
+            xblockview.SetDataAndSize(
+               x.GetData() + row_offsets[jblock],
+               row_offsets[jblock+1] - row_offsets[jblock]);
 
             Aij(jblock, iblock)->AddMultTranspose(xblockview, yblockview, val);
          }
@@ -557,13 +523,13 @@ void BlockMatrix::PartMult(const Array<int> &rows, const Vector &x,
 {
    Array<int> cols;
    Vector srow;
-   for (int i = 0; i < rows.Size(); i++)
+   for (int i = 0; i<rows.Size(); i++)
    {
-      int dof = (rows[i] >= 0) ? rows[i] : -1 - rows[i];
-      GetRow(dof, cols, srow);
+      int dof = (rows[i]>=0) ? rows[i] : -1-rows[i];
+      GetRow(dof,cols,srow);
 
-      real_t s = 0.0;
-      for (int k = 0; k < cols.Size(); k++)
+      real_t s=0.0;
+      for (int k = 0; k <cols.Size(); k++)
       {
          s += srow[k] * x[cols[k]];
       }
@@ -571,23 +537,25 @@ void BlockMatrix::PartMult(const Array<int> &rows, const Vector &x,
    }
 }
 void BlockMatrix::PartAddMult(const Array<int> &rows, const Vector &x,
-                              Vector &y, const real_t a) const
+                              Vector &y,
+                              const real_t a) const
 {
    Array<int> cols;
    Vector srow;
-   for (int i = 0; i < rows.Size(); i++)
+   for (int i = 0; i<rows.Size(); i++)
    {
-      int dof = (rows[i] >= 0) ? rows[i] : -1 - rows[i];
-      GetRow(dof, cols, srow);
+      int dof = (rows[i]>=0) ? rows[i] : -1-rows[i];
+      GetRow(dof,cols,srow);
 
-      real_t s = 0.0;
-      for (int k = 0; k < cols.Size(); k++)
+      real_t s=0.0;
+      for (int k = 0; k <cols.Size(); k++)
       {
          s += srow[k] * x[cols[k]];
       }
       y[dof] += a * s;
    }
 }
+
 
 SparseMatrix *BlockMatrix::CreateMonolithic() const
 {
@@ -686,14 +654,14 @@ SparseMatrix *BlockMatrix::CreateMonolithic() const
                            col_offsets[nColBlocks]);
 }
 
-void BlockMatrix::PrintMatlab(std::ostream &os) const
+void BlockMatrix::PrintMatlab(std::ostream & os) const
 {
 
    Vector row_data;
    Array<int> row_ind;
    int nnz_elem = NumNonZeroElems();
-   os << "% size " << row_offsets.Last() << " " << col_offsets.Last() << "\n";
-   os << "% Non Zeros " << nnz_elem << "\n";
+   os<<"% size " << row_offsets.Last() << " " << col_offsets.Last() << "\n";
+   os<<"% Non Zeros " << nnz_elem << "\n";
    int i, j;
    std::ios::fmtflags old_fmt = os.flags();
    os.setf(std::ios::scientific);
@@ -703,19 +671,19 @@ void BlockMatrix::PrintMatlab(std::ostream &os) const
       GetRow(i, row_ind, row_data);
       for (j = 0; j < row_ind.Size(); j++)
       {
-         os << i + 1 << " " << row_ind[j] + 1 << " " << row_data[j] << std::endl;
+         os << i+1 << " " << row_ind[j]+1 << " " << row_data[j] << std::endl;
       }
    }
    // Write a zero entry at (m,n) to make sure MATLAB doesn't shrink the matrix
-   os << row_offsets.Last() << " " << col_offsets.Last() << " 0.0\n";
+   os << row_offsets.Last() << " " << col_offsets.Last () << " 0.0\n";
 
    os.precision(old_prec);
    os.flags(old_fmt);
 }
 
-BlockMatrix *Transpose(const BlockMatrix &A)
+BlockMatrix * Transpose(const BlockMatrix & A)
 {
-   BlockMatrix *At = new BlockMatrix(A.ColOffsets(), A.RowOffsets());
+   BlockMatrix * At = new BlockMatrix(A.ColOffsets(), A.RowOffsets());
    At->owns_blocks = 1;
 
    for (int irowAt = 0; irowAt < At->NumRowBlocks(); ++irowAt)
@@ -731,9 +699,9 @@ BlockMatrix *Transpose(const BlockMatrix &A)
    return At;
 }
 
-BlockMatrix *Mult(const BlockMatrix &A, const BlockMatrix &B)
+BlockMatrix * Mult(const BlockMatrix & A, const BlockMatrix & B)
 {
-   BlockMatrix *C = new BlockMatrix(A.RowOffsets(), B.ColOffsets());
+   BlockMatrix * C= new BlockMatrix(A.RowOffsets(), B.ColOffsets());
    C->owns_blocks = 1;
    Array<SparseMatrix *> CijPieces(A.NumColBlocks());
 
@@ -753,8 +721,8 @@ BlockMatrix *Mult(const BlockMatrix &A, const BlockMatrix &B)
          if (CijPieces.Size() > 1)
          {
             C->SetBlock(irowC, jcolC, Add(CijPieces));
-            for (SparseMatrix **it = CijPieces.GetData();
-                 it != CijPieces.GetData() + CijPieces.Size(); ++it)
+            for (SparseMatrix ** it = CijPieces.GetData();
+                 it != CijPieces.GetData()+CijPieces.Size(); ++it)
             {
                delete *it;
             }
@@ -769,4 +737,4 @@ BlockMatrix *Mult(const BlockMatrix &A, const BlockMatrix &B)
    return C;
 }
 
-} // namespace mfem
+}
