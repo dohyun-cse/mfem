@@ -158,6 +158,7 @@ int main(int argc, char *argv[])
    mass.FormRectangularSystemMatrix(ess_tdofs, dummy, B_h);
    mass.ParallelEliminateTrialTDofsInRHS(ess_tdofs, tX.GetBlock(0),
                                          tF.GetBlock(1));
+   tF.SyncFromBlocks();
 
    ConstantCoefficient one_cf(1.0);
    CoefficientScaledLegendreFunction entropy(new Shannon, one_cf, obstacle);
