@@ -188,7 +188,7 @@ int main(int argc, char *argv[])
 
    real_t err0 = u.ComputeL2Error(u_ex);
    cout << "Initial L2 error: " << err0 << endl;
-   for (int i=0; i<100; i++)
+   for (int i=0; i<1; i++)
    {
       Xk = X;
       Xk.HostRead();
@@ -214,7 +214,9 @@ int main(int argc, char *argv[])
    }
    real_t err = u.ComputeL2Error(u_ex);
    cout << "L2 error: " << err << endl;
-
+   
+   cout << "A: " << A.ReadI() << ", " << A.ReadJ() << ", " << A.ReadData() << std::endl;
+   cout << "B: " << B.ReadI() << ", " << B.ReadJ() << ", " << B.ReadData() << std::endl;
    return EXIT_SUCCESS;
 }
 

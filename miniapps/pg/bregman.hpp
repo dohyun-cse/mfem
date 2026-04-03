@@ -775,7 +775,10 @@ public:
       : f(func), latent(&psi), own_coeff(false) {}
    PrimalCoefficient(QuadratureFunction &psi, const LegendreFunction &func)
       : f(func), latent(new QuadratureFunctionCoefficient(psi)), own_coeff(true) {}
-   virtual ~PrimalCoefficient() {}
+   virtual ~PrimalCoefficient()
+   {
+     if (own_coeff && latent) { delete latent; }
+   }
    real_t Eval(ElementTransformation &Tr,
                const IntegrationPoint &ip) override
    {
@@ -821,7 +824,10 @@ public:
       : f(func), latent(new GridFunctionCoefficient(&psi)), own_coeff(true) {}
    PrimalJacobianCoefficient(Coefficient &psi, const LegendreFunction &func)
       : f(func), latent(&psi), own_coeff(false) {}
-   virtual ~PrimalJacobianCoefficient() {}
+   virtual ~PrimalJacobianCoefficient()
+   {
+     if (own_coeff && latent) { delete latent; }
+   }
    real_t Eval(ElementTransformation &Tr,
                const IntegrationPoint &ip) override
    {

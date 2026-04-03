@@ -52,6 +52,7 @@ PGOperator::PGOperator(Operator &A_,
    pg_blockmat->SetBlock(0, 0, static_cast<SparseMatrix*>(&A));
    pg_blockmat->SetBlock(0, 1, static_cast<SparseMatrix*>(neg_Bt.get()));
    pg_blockmat->SetBlock(1, 0, static_cast<SparseMatrix*>(&B));
+   pg_blockmat->owns_blocks = false;
 }
 
 #ifdef MFEM_USE_MPI
