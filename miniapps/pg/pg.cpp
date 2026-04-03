@@ -194,9 +194,9 @@ Operator &PGOperator::GetGradient(const Vector &x) const
    }
    if (debug) {out << "PGOperator::GetGradient #3: setup gradient operator" << std::endl; }
    // serial
-   SparseMatrix H;
-   dualhess->FormSystemMatrix(latent_ess_tdof, H);
-   pg_blockmat->SetBlock(1, 1, &H);
+   OperatorHandle H;
+   dualhess->FormSystemMatrix(ess_tdofs, H);
+   pg_blockmat->SetBlock(1, 1, H_h.As<SparseMatrix>());
    pg_op.reset(pg_blockmat->CreateMonolithic());
    dualhess->Update();
    if (debug) {out << "PGOperator::GetGradient done" << std::endl; }

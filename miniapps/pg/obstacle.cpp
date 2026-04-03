@@ -129,16 +129,18 @@ int main(int argc, char *argv[])
    BilinearForm diffusion(&primal_fes);
    diffusion.AddDomainIntegrator(new DiffusionIntegrator);
    diffusion.Assemble();
-   SparseMatrix A;
-   diffusion.FormSystemMatrix(ess_tdofs, A);
+   OperatorHandle A_h;
+   diffusion.FormSystemMatrix(ess_tdofs, A_h);
+   SparseMatrix &A = *A_h.As<SparseMatrix>();
    diffusion.EliminateVDofsInRHS(ess_tdofs, u, F.GetBlock(0));
 
    MixedBilinearForm mass(&primal_fes, &latent_fes);
    mass.AddDomainIntegrator(new MassIntegrator);
    mass.Assemble();
-   SparseMatrix B;
+   OperatorHandle B_h;
    Array<int> dummy(0);
-   mass.FormRectangularSystemMatrix(ess_tdofs, dummy, B);
+   mass.FormRectangularSystemMatrix(ess_tdofs, dummy, B_h);
+   SparseMatrix &B = *B_h.As<SparseMatrix>();
    mass.EliminateTrialVDofsInRHS(ess_tdofs, u, F.GetBlock(1));
    F.SyncFromBlocks();
 
