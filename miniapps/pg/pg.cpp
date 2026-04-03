@@ -124,6 +124,7 @@ void PGOperator::Mult(const Vector &x, Vector &y) const
    // psi = psi_k - alpha*lambda
    add(psi_k->GetTrueVector(), -alpha, lambda, psi->GetTrueVector());
    psi->SetFromTrueVector();
+   psi->HostRead(); // sync GPU → CPU before coefficient evaluation in Assemble()
 
    if (debug) { out << "PGOperator::Mult #2: setup output vector" << std::endl; }
    y.SetSize(Height());
@@ -174,6 +175,7 @@ Operator &PGOperator::GetGradient(const Vector &x) const
    if (debug) {out << "PGOperator::GetGradient #1: latent update" << std::endl; }
    add(psi_k->GetTrueVector(), -alpha, lambda, psi->GetTrueVector());
    psi->SetFromTrueVector();
+   psi->HostRead(); // sync GPU → CPU before coefficient evaluation in Assemble()
 
    if (debug) {out << "PGOperator::GetGradient #2: update dual Hessian" << std::endl; }
    dualhess->Assemble(false);

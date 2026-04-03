@@ -46,7 +46,7 @@ int main(int argc, char *argv[])
    int ser_ref_levels = 0;
    int par_ref_levels = 0;
    const char *device_config = "cpu";
-   bool visualization = true;
+   bool visualization = false;
    bool use_cudss = false;
    real_t primal_tol = 1e-08;
    real_t dual_tol = 1e-08;
@@ -201,7 +201,7 @@ int main(int argc, char *argv[])
    pg_solver.SetRelTol(1e-08);
    pg_solver.SetAbsTol(1e-12);
    pg_solver.SetMaxIter(20);
-   pg_solver.SetPrintLevel(0);
+   pg_solver.SetPrintLevel(NewtonSolver::PrintLevel().Iterations());
    pg_solver.SetSolver(*linear_solver);
    pg_solver.SetOperator(pg_op);
 
