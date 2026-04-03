@@ -126,7 +126,7 @@ EXAMPLE_TEST_DIRS := examples
 MINIAPP_SUBDIRS = common electromagnetics meshing performance tools \
  toys nurbs gslib adjoint solvers shifted mtop parelag tribol autodiff dfem \
  hooke multidomain dpg hdiv-linear-solver spde diag-smoothers contact \
- fluids/navier fluids/schrodinger-flow plasma pg
+ fluids/navier fluids/schrodinger-flow plasma
 MINIAPP_DIRS := $(addprefix miniapps/,$(MINIAPP_SUBDIRS))
 MINIAPP_TEST_DIRS := $(filter-out %/common,$(MINIAPP_DIRS))
 MINIAPP_USE_COMMON := $(addprefix miniapps/,electromagnetics meshing tools \
@@ -372,7 +372,7 @@ MFEM_DEFINES = MFEM_VERSION MFEM_VERSION_STRING MFEM_GIT_STRING MFEM_USE_MPI\
  MFEM_USE_MAGMA MFEM_USE_MUMPS MFEM_USE_ADFORWARD MFEM_USE_CODIPACK MFEM_USE_CALIPER\
  MFEM_USE_BENCHMARK MFEM_USE_PARELAG MFEM_USE_TRIBOL MFEM_USE_ALGOIM MFEM_USE_ENZYME\
  MFEM_SOURCE_DIR MFEM_INSTALL_DIR MFEM_SHARED_BUILD MFEM_USE_DOUBLE MFEM_USE_SINGLE\
- MFEM_USE_CUDSS
+ MFEM_USE_CUDSS MFEM_CUDSS_COMM_LIB MFEM_CUDSS_THREADING_LIB
 
 # List of makefile variables that will be written to config.mk:
 MFEM_CONFIG_VARS = MFEM_CXX MFEM_HOST_CXX MFEM_CPPFLAGS MFEM_CXXFLAGS\
@@ -739,6 +739,8 @@ status info:
 	$(info MFEM_USE_MUMPS         = $(MFEM_USE_MUMPS))
 	$(info MFEM_USE_STRUMPACK     = $(MFEM_USE_STRUMPACK))
 	$(info MFEM_USE_CUDSS         = $(MFEM_USE_CUDSS))
+	$(info MFEM_CUDSS_COMM_LIB    = $(MFEM_CUDSS_COMM_LIB))
+	$(info MFEM_CUDSS_THREADING_LIB = $(MFEM_CUDSS_THREADING_LIB))
 	$(info MFEM_USE_GINKGO        = $(MFEM_USE_GINKGO))
 	$(info MFEM_USE_AMGX          = $(MFEM_USE_AMGX))
 	$(info MFEM_USE_MAGMA         = $(MFEM_USE_MAGMA))
