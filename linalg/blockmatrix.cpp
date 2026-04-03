@@ -564,6 +564,7 @@ SparseMatrix * BlockMatrix::CreateMonolithic() const
    int * i_amono = Memory<int>(row_offsets[nRowBlocks]+2);
    int * j_amono = Memory<int>(nnz);
    real_t * data = Memory<real_t>(nnz);
+   out << " DONE" << std::endl;
 
    for (int i = 0; i < row_offsets[nRowBlocks]+2; i++)
    {
@@ -586,7 +587,6 @@ SparseMatrix * BlockMatrix::CreateMonolithic() const
          }
          i_amono_construction[irow+1] = ind;
       }
-      out << iblock << " DONE" << std::endl;
    }
 
    // Fill in the jarray and copy the data
