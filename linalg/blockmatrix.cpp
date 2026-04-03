@@ -590,6 +590,8 @@ SparseMatrix * BlockMatrix::CreateMonolithic() const
          }
       }
    }
+   MFEM_VERIFY(i_amono != nullptr,
+               "BlockMatrix::CreateMonolithic: All blocks are empty");
    Array2D<const int*> Aij_I(nRowBlocks,nColBlocks);
    Aij_I = (const int*)NULL;
    Array2D<const int*> Aij_J(nRowBlocks,nColBlocks);
