@@ -561,9 +561,11 @@ SparseMatrix * BlockMatrix::CreateMonolithic() const
 {
    int nnz = NumNonZeroElems();
 
-   int * i_amono = nullptr;
-   int * j_amono = nullptr;
-   real_t * data = nullptr;
+   out << "Creating monolithic matrix from block matrix: " << height << " x "
+       << width << ", nnz = " << nnz << std::endl;
+   Memory<int> i_amono;
+   Memory<int> j_amono;
+   Memory<real_t> data;
    MemoryType h_mt, d_mt;
    for (int i=0; i<nRowBlocks; i++)
    {
@@ -577,32 +579,30 @@ SparseMatrix * BlockMatrix::CreateMonolithic() const
             {
                h_mt = h_mt_curr;
                d_mt = d_mt_curr;
-               i_amono = Memory<int>(row_offsets[nRowBlocks]+2, h_mt, d_mt);
-               j_amono = Memory<int>(nnz, h_mt, d_mt);
-               data = Memory<real_t>(nnz, h_mt, d_mt);
+               i_amono.New(row_offsets[nRowBlocks]+2, h_mt, d_mt);
+               j_amono.New(nnz, h_mt, d_mt);
+               data.New(nnz, h_mt, d_mt);
             }
             else
             {
                MFEM_VERIFY(h_mt == h_mt_curr && d_mt == d_mt_curr,
                            "BlockMatrix::CreateMonolithic: Inconsistent memory types");
             }
-            break;
          }
       }
    }
-   MFEM_VERIFY(i_amono != nullptr,
+   MFEM_VERIFY(!i_amono.Empty(),
                "BlockMatrix::CreateMonolithic: All blocks are empty");
+   for (int i = 0; i < row_offsets[nRowBlocks]+2; i++)
+   {
+      i_amono[i] = 0;
+   }
    Array2D<const int*> Aij_I(nRowBlocks,nColBlocks);
    Aij_I = (const int*)NULL;
    Array2D<const int*> Aij_J(nRowBlocks,nColBlocks);
    Aij_J = (const int*)NULL;
    Array2D<const real_t*> Aij_Data(nRowBlocks,nColBlocks);
    Aij_Data = (const real_t*)NULL;
-
-   for (int i = 0; i < row_offsets[nRowBlocks]+2; i++)
-   {
-      i_amono[i] = 0;
-   }
 
    int * i_amono_construction = i_amono+1;
 

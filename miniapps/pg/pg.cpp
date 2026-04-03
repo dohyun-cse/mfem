@@ -199,6 +199,7 @@ Operator &PGOperator::GetGradient(const Vector &x) const
    H *= alpha;
    pg_blockmat->SetBlock(1, 1, &H);
    pg_op.reset(pg_blockmat->CreateMonolithic());
+   pg_op->Finalize();
    if (debug) {out << "PGOperator::GetGradient done" << std::endl; }
    return *pg_op;
 }
