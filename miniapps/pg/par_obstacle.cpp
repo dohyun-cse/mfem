@@ -51,6 +51,7 @@ int main(int argc, char *argv[])
    real_t primal_tol = 1e-08;
    real_t dual_tol = 1e-08;
    bool debug = false;
+   real_t alpha=1.0;
 
    OptionsParser args(argc, argv);
    // args.AddOption(&mesh_file, "-m", "--mesh",
@@ -71,6 +72,7 @@ int main(int argc, char *argv[])
                   "Enable or disable GLVis visualization.");
    args.AddOption(&debug, "-db", "--debug", "-no-debug", "--no-debug",
                   "Enable or disable debug output.");
+   args.AddOption(&alpha, "-a", "--alpha", "PG alpha parameter.");
    args.ParseCheck();
 
    // 2. Enable hardware devices such as GPUs, and programming models such as
@@ -82,7 +84,6 @@ int main(int argc, char *argv[])
    // 3. Read the mesh from the given mesh file. We can handle triangular,
    //    quadrilateral, tetrahedral, hexahedral, surface and volume meshes with
    //    the same code.
-   // Mesh mesh(mesh_file, 1, 1);
    Mesh ser_mesh = Mesh::MakeCartesian2D(10, 10, Element::QUADRILATERAL);
    ser_mesh.Transform([](const Vector &x, Vector &y) { y = x; y *= 2.0; y -= 1.0; });
    for (int l = 0; l < ser_ref_levels; l++) { ser_mesh.UniformRefinement(); }
@@ -172,7 +173,6 @@ int main(int argc, char *argv[])
 
    ConstantCoefficient one_cf(1.0);
    CoefficientScaledLegendreFunction entropy(new Shannon, one_cf, obstacle);
-   real_t alpha=0.01;
    PGOperator pg_op(*A_h.As<HypreParMatrix>(), *B_h.As<HypreParMatrix>(),
                     latent_fes, entropy, alpha);
    pg_op.SetDebug(debug);
