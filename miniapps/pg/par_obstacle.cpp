@@ -136,7 +136,7 @@ int main(int argc, char *argv[])
    ParGridFunction u(&primal_fes, X.GetBlock(0));
    ParGridFunction u_k(&primal_fes, Xk.GetBlock(0));
    u.ProjectBdrCoefficient(u_ex, ess_bdr);
-   X.SyncToBlocks();
+   X.SyncFromBlocks();
    u.GetTrueDofs(tX.GetBlock(0));
    tX.SyncFromBlocks();
    ParGridFunction lambda(&latent_fes, X.GetBlock(1));
@@ -169,11 +169,10 @@ int main(int argc, char *argv[])
    out << "dual_true:       " << tX.GetBlock(1).Norml2() << std::endl;
    out << "primal_rhs_true: " << tF.GetBlock(0).Norml2() << std::endl;
    out << "dual_rhs_true:   " << tF.GetBlock(1).Norml2() << std::endl;
-   return EXIT_SUCCESS;
 
    ConstantCoefficient one_cf(1.0);
    CoefficientScaledLegendreFunction entropy(new Shannon, one_cf, obstacle);
-   real_t alpha=1.0;
+   real_t alpha=0.01;
    PGOperator pg_op(*A_h.As<HypreParMatrix>(), *B_h.As<HypreParMatrix>(),
                     latent_fes, entropy, alpha);
    pg_op.SetDebug(debug);
@@ -224,9 +223,9 @@ int main(int argc, char *argv[])
       Xk = X;
       Xk.HostRead();
       pg_solver.Mult(tF, tX);
+      tX.HostRead();
       u.SetFromTrueDofs(tX.GetBlock(0));
       lambda.SetFromTrueDofs(tX.GetBlock(1));
-      X.SyncFromBlocks();
       X.HostRead();
       pout << "PG iteration " << i << ", Newton it: " << pg_solver.GetNumIterations()
            << ", residual norm: " << pg_solver.GetFinalNorm() << endl;
