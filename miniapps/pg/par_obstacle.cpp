@@ -130,11 +130,13 @@ int main(int argc, char *argv[])
    BlockVector X(loffsets, mt), F(loffsets, mt), Xk(loffsets, mt);
    BlockVector tX(toffsets, mt), tF(toffsets, mt);
    X = 0.0; F = 0.0; tX = 0.0; tF = 0.0;
+   X.SyncToBlocks(); F.SyncToBlocks(); Xk.SyncToBlocks();
+   tX.SyncToBlocks(); tF.SyncToBlocks();
 
    ParGridFunction u(&primal_fes, X.GetBlock(0));
    ParGridFunction u_k(&primal_fes, Xk.GetBlock(0));
    u.ProjectBdrCoefficient(u_ex, ess_bdr);
-   X.SyncFromBlocks();
+   X.SyncToBlocks();
    u.GetTrueDofs(tX.GetBlock(0));
    tX.SyncFromBlocks();
    ParGridFunction lambda(&latent_fes, X.GetBlock(1));
@@ -158,7 +160,16 @@ int main(int argc, char *argv[])
    mass.FormRectangularSystemMatrix(ess_tdofs, dummy, B_h);
    mass.ParallelEliminateTrialTDofsInRHS(ess_tdofs, tX.GetBlock(0),
                                          tF.GetBlock(1));
+   tX.SyncFromBlocks();
    tF.SyncFromBlocks();
+
+   tX.HostRead();
+   tF.HostRead();
+   out << "primal_true:     " << tX.GetBlock(0).Norml2() << std::endl;
+   out << "dual_true:       " << tX.GetBlock(1).Norml2() << std::endl;
+   out << "primal_rhs_true: " << tF.GetBlock(0).Norml2() << std::endl;
+   out << "dual_rhs_true:   " << tF.GetBlock(1).Norml2() << std::endl;
+   return EXIT_SUCCESS;
 
    ConstantCoefficient one_cf(1.0);
    CoefficientScaledLegendreFunction entropy(new Shannon, one_cf, obstacle);
