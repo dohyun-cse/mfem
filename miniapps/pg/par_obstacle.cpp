@@ -52,6 +52,7 @@ int main(int argc, char *argv[])
    real_t dual_tol = 1e-08;
    bool debug = false;
    real_t alpha=1.0;
+   real_t grow_factor = 2.0;
 
    OptionsParser args(argc, argv);
    // args.AddOption(&mesh_file, "-m", "--mesh",
@@ -73,6 +74,8 @@ int main(int argc, char *argv[])
    args.AddOption(&debug, "-db", "--debug", "-no-debug", "--no-debug",
                   "Enable or disable debug output.");
    args.AddOption(&alpha, "-a", "--alpha", "PG alpha parameter.");
+   args.AddOption(&grow_factor, "-ag", "--alpha-growth-factor",
+                  "PG alpha grow factor.");
    args.ParseCheck();
 
    // 2. Enable hardware devices such as GPUs, and programming models such as
@@ -245,7 +248,7 @@ int main(int argc, char *argv[])
          *sol_sock << "parallel " << num_procs << " " << myid << "\n";
          *sol_sock << "solution\n" << mesh << u << flush;
       }
-      alpha *= 1.5;
+      alpha *= grow_factor;
    }
    real_t err = u.ComputeL2Error(u_ex);
    pout << "L2 error: " << err << endl;
