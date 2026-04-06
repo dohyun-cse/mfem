@@ -251,7 +251,6 @@ int main(int argc, char *argv[])
 #ifdef MFEM_USE_CUDSS
    if (!pa && (Device::Allows(Backend::CUDA_MASK)))
    {
-      device.SetGPUAwareMPI(true);
       // Solve using a direct solver with cuDSS
       CuDSSSolver cudss_solver(MPI_COMM_WORLD);
       cudss_solver.SetMatrixSymType(
