@@ -175,9 +175,9 @@ void CuDSSSolver::SetMatrix(const HypreParMatrix &op)
    bool cuDSSObjectInitialized = (Ac != nullptr);
 
    const HypreParMatrix *A = dynamic_cast<const HypreParMatrix *>(&op);
-   A->HostRead();
+   A->HypreRead();
    hypre_ParCSRMatrix *parcsr_op = *A;
-   hypre_CSRMatrix *csr_op = hypre_MergeDiagAndOffd(parcsr_op);
+   hypre_CSRMatrix *csr_op = hypre_MergeDiagAndOffdDevice(parcsr_op);
 #if MFEM_HYPRE_VERSION >= 21600
    hypre_CSRMatrixBigJtoJ(csr_op);
 #endif
