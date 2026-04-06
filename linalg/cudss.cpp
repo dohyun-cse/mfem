@@ -192,25 +192,7 @@ void CuDSSSolver::SetMatrix(const HypreParMatrix &op)
                "Inconsistent new matrix pattern!");
    nnz = csr_op->num_nonzeros;
 
-   // hypre_MergeDiagAndOffd allocates on host. Copy I and J to persistent
-   // device buffers so cuDSS can reference them after csr_op is freed.
-   if (csr_offsets_d) { CuMemFree(csr_offsets_d); }
-   if (csr_columns_d) { CuMemFree(csr_columns_d); }
-   CuMemAlloc(&csr_offsets_d, (n_loc + 1) * sizeof(int));
-   CuMemAlloc(&csr_columns_d, nnz * sizeof(int));
-   CuMemcpyHtoD(csr_offsets_d, csr_op->i, (n_loc + 1) * sizeof(int));
-   CuMemcpyHtoD(csr_columns_d, csr_op->j, nnz * sizeof(int));
-
-   // Copy values to a temporary device buffer since csr_op->data is on host
-   // and SetMatrixCuDSS uses CuMemcpyDtoD.
-   void *values_d = nullptr;
-   CuMemAlloc(&values_d, nnz * sizeof(real_t));
-   CuMemcpyHtoD(values_d, csr_op->data, nnz * sizeof(real_t));
-
-   SetMatrixCuDSS(static_cast<int*>(csr_offsets_d),
-                  static_cast<int*>(csr_columns_d),
-                  static_cast<real_t*>(values_d));
-   CuMemFree(values_d);
+   SetMatrixCuDSS(csr_op->i, csr_op->j, csr_op->data);
    hypre_CSRMatrixDestroy(csr_op);
 }
 #endif // MFEM_USE_MPI
@@ -262,14 +244,11 @@ void CuDSSSolver::SetMatrixCuDSS(int *csr_offsets, int *csr_columns,
          // NOTE: For CuDSS solver to reuse the reordering (skipping analysis
          // phase), it needs to access the I and J arrays of the **initial**
          // matrix. Therefore, we need to copy and keep I and J in device memory.
-         // For the HypreParMatrix path, these are already copied in SetMatrix.
-         if (!csr_offsets_d)
-         {
-            CuMemAlloc(&csr_offsets_d, (n_loc + 1) * sizeof(int));
-            CuMemAlloc(&csr_columns_d, nnz * sizeof(int));
-            CuMemcpyDtoD(csr_offsets_d, csr_offsets, (n_loc + 1) * sizeof(int));
-            CuMemcpyDtoD(csr_columns_d, csr_columns, nnz * sizeof(int));
-         }
+         CuMemAlloc(&csr_offsets_d, (n_loc + 1) * sizeof(int));
+         CuMemAlloc(&csr_columns_d, nnz * sizeof(int));
+
+         CuMemcpyDtoD(csr_offsets_d, csr_offsets, (n_loc + 1) * sizeof(int));
+         CuMemcpyDtoD(csr_columns_d, csr_columns, nnz * sizeof(int));
 
          MFEM_CUDSS_CHECK(
             cudssMatrixCreateCsr(
@@ -283,13 +262,9 @@ void CuDSSSolver::SetMatrixCuDSS(int *csr_offsets, int *csr_columns,
          {
             MFEM_CUDSS_CHECK(cudssMatrixDestroy(*Ac));
          }
-         // Use persistent device copies if available (HypreParMatrix path),
-         // otherwise use the caller's pointers directly (SparseMatrix path).
-         int *i_ptr = csr_offsets_d ? static_cast<int*>(csr_offsets_d) : csr_offsets;
-         int *j_ptr = csr_columns_d ? static_cast<int*>(csr_columns_d) : csr_columns;
          MFEM_CUDSS_CHECK(
             cudssMatrixCreateCsr(
-               Ac.get(), n_global, n_global, nnz, i_ptr, NULL, j_ptr,
+               Ac.get(), n_global, n_global, nnz, csr_offsets, NULL, csr_columns,
                csr_values_d, CUDA_R_32I, CUDA_REAL_T, mat_type, mview,
                CUDSS_BASE_ZERO));
       }
