@@ -192,7 +192,19 @@ void CuDSSSolver::SetMatrix(const HypreParMatrix &op)
                "Inconsistent new matrix pattern!");
    nnz = csr_op->num_nonzeros;
 
-   SetMatrixCuDSS(csr_op->i, csr_op->j, csr_op->data);
+   // hypre_MergeDiagAndOffdDevice allocates I/J/data on device, but
+   // hypre_CSRMatrixDestroy frees them. Copy to persistent device buffers
+   // so cuDSS can reference them after csr_op is destroyed.
+   if (csr_offsets_d) { CuMemFree(csr_offsets_d); }
+   if (csr_columns_d) { CuMemFree(csr_columns_d); }
+   CuMemAlloc(&csr_offsets_d, (n_loc + 1) * sizeof(int));
+   CuMemAlloc(&csr_columns_d, nnz * sizeof(int));
+   CuMemcpyDtoD(csr_offsets_d, csr_op->i, (n_loc + 1) * sizeof(int));
+   CuMemcpyDtoD(csr_columns_d, csr_op->j, nnz * sizeof(int));
+
+   SetMatrixCuDSS(static_cast<int*>(csr_offsets_d),
+                  static_cast<int*>(csr_columns_d),
+                  csr_op->data);
    hypre_CSRMatrixDestroy(csr_op);
 }
 #endif // MFEM_USE_MPI
