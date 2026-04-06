@@ -330,6 +330,10 @@ int main(int argc, char *argv[])
    {
       delete fec;
    }
+   if (myid == 0)
+   {
+      cout << "Done." << endl;
+   }
 
    return 0;
 }
