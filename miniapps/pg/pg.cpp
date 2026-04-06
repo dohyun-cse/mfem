@@ -205,6 +205,7 @@ Operator &PGOperator::GetGradient(const Vector &x) const
    psi->HostRead(); // sync GPU → CPU before coefficient evaluation in Assemble()
 
    if (debug) {out << "PGOperator::GetGradient #2: update dual Hessian" << std::endl; }
+   dualhess->Update(); // no longer needed after this.
    dualhess->Assemble(false);
    dualhess->SpMat() *= alpha;
    dualhess->FormSystemMatrix(latent_ess_tdof, H);
@@ -227,7 +228,6 @@ Operator &PGOperator::GetGradient(const Vector &x) const
       pg_blockmat->SetBlock(1, 1, H.As<SparseMatrix>());
       pg_op.Reset(pg_blockmat->CreateMonolithic());
    }
-   dualhess->Update(); // no longer needed after this.
    if (debug) {out << "PGOperator::GetGradient done" << std::endl; }
    return *pg_op;
 }
