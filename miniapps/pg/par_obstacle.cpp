@@ -167,12 +167,12 @@ int main(int argc, char *argv[])
    tX.SyncFromBlocks();
    tF.SyncFromBlocks();
 
-   tX.HostRead();
-   tF.HostRead();
-   out << "primal_true:     " << tX.GetBlock(0).Norml2() << std::endl;
-   out << "dual_true:       " << tX.GetBlock(1).Norml2() << std::endl;
-   out << "primal_rhs_true: " << tF.GetBlock(0).Norml2() << std::endl;
-   out << "dual_rhs_true:   " << tF.GetBlock(1).Norml2() << std::endl;
+   // tX.HostRead();
+   // tF.HostRead();
+   // out << "primal_true:     " << tX.GetBlock(0).Norml2() << std::endl;
+   // out << "dual_true:       " << tX.GetBlock(1).Norml2() << std::endl;
+   // out << "primal_rhs_true: " << tF.GetBlock(0).Norml2() << std::endl;
+   // out << "dual_rhs_true:   " << tF.GetBlock(1).Norml2() << std::endl;
 
    ConstantCoefficient one_cf(1.0);
    CoefficientScaledLegendreFunction entropy(new Shannon, one_cf, obstacle);
