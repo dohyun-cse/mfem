@@ -81,6 +81,7 @@ int main(int argc, char *argv[])
    // 2. Enable hardware devices such as GPUs, and programming models such as
    //    CUDA, OCCA, RAJA and OpenMP based on command line options.
    Device device(device_config);
+   device.SetGPUAwareMPI(true);
    device.Print(pout);
    MemoryType mt = device.GetMemoryType();
 
@@ -230,6 +231,7 @@ int main(int argc, char *argv[])
       u.SetFromTrueDofs(tX.GetBlock(0));
       lambda.SetFromTrueDofs(tX.GetBlock(1));
       X.SyncFromBlocks();
+      X.HostRead();
       pout << "PG iteration " << i << ", Newton it: " << pg_solver.GetNumIterations()
            << ", residual norm: " << pg_solver.GetFinalNorm() << endl;
       real_t primal_diff = u_k.ComputeL2Error(u_cf);
