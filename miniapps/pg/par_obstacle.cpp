@@ -229,7 +229,7 @@ int main(int argc, char *argv[])
       tX.HostRead();
       u.SetFromTrueDofs(tX.GetBlock(0));
       lambda.SetFromTrueDofs(tX.GetBlock(1));
-      X.HostRead();
+      X.SyncFromBlocks();
       pout << "PG iteration " << i << ", Newton it: " << pg_solver.GetNumIterations()
            << ", residual norm: " << pg_solver.GetFinalNorm() << endl;
       real_t primal_diff = u_k.ComputeL2Error(u_cf);
