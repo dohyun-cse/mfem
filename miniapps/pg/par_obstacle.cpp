@@ -200,6 +200,7 @@ int main(int argc, char *argv[])
       auto *cudss_solver = new CuDSSSolver(comm);
       cudss_solver->SetReorderingReuse(true);
       cudss_solver->SetMatrixSymType(CuDSSSolver::SYMMETRIC_INDEFINITE);
+      cudss_solver->SetMatrixViewType(CuDSSSolver::LOWER)
       linear_solver.reset(cudss_solver);
 #endif
    }
