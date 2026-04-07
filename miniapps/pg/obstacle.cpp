@@ -37,7 +37,6 @@ int main(int argc, char *argv[])
    int ref_levels = 0;
    const char *device_config = "cpu";
    bool visualization = true;
-   bool use_cudss = false;
    real_t primal_tol = 1e-08;
    real_t dual_tol = 1e-08;
    bool debug = false;
@@ -147,7 +146,7 @@ int main(int argc, char *argv[])
    pg_op.SetDebug(debug);
 
    std::unique_ptr<Solver> linear_solver;
-   if (use_cudss && Device::Allows(Backend::CUDA_MASK))
+   if (Device::Allows(Backend::CUDA_MASK))
    {
 #ifdef MFEM_USE_CUDSS
       auto * cudss_solver = new CuDSSSolver;

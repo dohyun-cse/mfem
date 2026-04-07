@@ -50,7 +50,6 @@ int main(int argc, char *argv[])
    int par_ref_levels = 0;
    const char *device_config = "cpu";
    bool visualization = false;
-   bool use_cudss = false;
    real_t primal_tol = 1e-08;
    real_t dual_tol = 1e-08;
    bool debug = false;
