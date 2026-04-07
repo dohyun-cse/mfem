@@ -251,13 +251,21 @@ int main(int argc, char *argv[])
 #ifdef MFEM_USE_CUDSS
    if (!pa && (Device::Allows(Backend::CUDA_MASK)))
    {
+      if (myid == 0)
+      {
+        out << "CuDSS Start" << std::endl;
+      }
       // Solve using a direct solver with cuDSS
       CuDSSSolver cudss_solver(MPI_COMM_WORLD);
-      cudss_solver.SetMatrixSymType(
-         CuDSSSolver::MatType::SYMMETRIC_POSITIVE_DEFINITE);
-      cudss_solver.SetMatrixViewType(CuDSSSolver::MatViewType::UPPER);
+      // cudss_solver.SetMatrixSymType(
+      //    CuDSSSolver::MatType::SYMMETRIC_POSITIVE_DEFINITE);
+      // cudss_solver.SetMatrixViewType(CuDSSSolver::MatViewType::UPPER);
       cudss_solver.SetOperator(*A);
       cudss_solver.Mult(B, X);
+      if (myid == 0)
+      {
+        out << "CuDSS Done" << std::endl;
+      }
    }
    else
 #endif

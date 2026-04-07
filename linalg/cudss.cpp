@@ -61,6 +61,8 @@ CuDSSSolver::CuDSSSolver(MPI_Comm comm_) : mpi_comm(comm_)
    comm_lib = MFEM_CUDSS_COMM_LIB;
 #endif
    MFEM_CUDSS_CHECK(cudssSetCommLayer(handle, comm_lib));
+   if (comm_lib) { mfem::out << "CuDSS comm layer: " << comm_lib << std::endl; }                             
+  else { mfem::out << "CuDSS comm layer: NULL" << std::endl; }
 
    MFEM_CUDSS_CHECK(cudssDataSet(handle, solverData, CUDSS_DATA_COMM,
                                  &mpi_comm, sizeof(MPI_Comm *)));
