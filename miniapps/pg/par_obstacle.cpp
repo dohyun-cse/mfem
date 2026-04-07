@@ -199,7 +199,7 @@ int main(int argc, char *argv[])
 #ifdef MFEM_USE_CUDSS
       auto *cudss_solver = new CuDSSSolver(comm);
       cudss_solver->SetReorderingReuse(true);
-      cudss_solver->SetMatrixSymType(CuDSSSolver::SYMMETRIC_INDEFINITE);
+      cudss_solver->SetMatrixSymType(CuDSSSolver::MatType::SYMMETRIC_INDEFINITE);
       cudss_solver.SetMatrixViewType(CuDSSSolver::MatViewType::UPPER);
       linear_solver.reset(cudss_solver);
 #endif
