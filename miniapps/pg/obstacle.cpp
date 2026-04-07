@@ -89,7 +89,7 @@ int main(int argc, char *argv[])
    // 5. Define a finite element space on the mesh. Here we use continuous
    //    Lagrange finite elements of the specified order. If order < 1, we
    //    instead use an isoparametric/isogeometric space.
-   H1_FECollection primal_fec(order+1, dim);
+   H1Bubble_FECollection primal_fec(order, order-1, dim);
    L2_FECollection latent_fec(order-1, dim);
    FiniteElementSpace primal_fes(&mesh, &primal_fec);
    FiniteElementSpace latent_fes(&mesh, &latent_fec);
