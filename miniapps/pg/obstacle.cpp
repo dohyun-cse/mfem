@@ -41,7 +41,7 @@ int main(int argc, char *argv[])
    real_t primal_tol = 1e-08;
    real_t dual_tol = 1e-08;
    bool debug = false;
-   real_t alpha=1.0;
+   real_t alpha=0.01;
    real_t grow_factor = 2.0;
 
    OptionsParser args(argc, argv);
@@ -54,8 +54,6 @@ int main(int argc, char *argv[])
                   "Number of times to refine the mesh uniformly.");
    args.AddOption(&device_config, "-d", "--device",
                   "Device configuration string, see Device::Configure().");
-   args.AddOption(&use_cudss, "-cudss", "--cudss-solver", "-no-cudss",
-                  "--no-cudss-solver", "Use the cuDSS Solver.");
    args.AddOption(&visualization, "-vis", "--visualization", "-no-vis",
                   "--no-visualization",
                   "Enable or disable GLVis visualization.");
@@ -153,6 +151,7 @@ int main(int argc, char *argv[])
    {
 #ifdef MFEM_USE_CUDSS
       auto * cudss_solver = new CuDSSSolver;
+      cudss_solver->SetMatrixSymType(CuDSSSolver::SYMMETRIC_INDEFINITE);
       cudss_solver->SetReorderingReuse(true);
       linear_solver.reset(cudss_solver);
 #endif
@@ -161,10 +160,13 @@ int main(int argc, char *argv[])
    {
 #ifdef MFEM_USE_SUITESPARSE
       linear_solver.reset(new UMFPackSolver);
-#else
-      MFEM_ABORT("Either GPU or SuiteSparse must be enabled");
 #endif
    }
+   if (!linear_solver)
+   {
+      MFEM_ABORT("Either CuDSS or SuiteSparse must be enabled");
+   }
+
 
 
    // 14. Send the solution by socket to a GLVis server.

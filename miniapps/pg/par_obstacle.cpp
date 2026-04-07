@@ -54,8 +54,8 @@ int main(int argc, char *argv[])
    real_t primal_tol = 1e-08;
    real_t dual_tol = 1e-08;
    bool debug = false;
-   real_t alpha = 1.0;
-   real_t grow_factor = 1.5;
+   real_t alpha = 0.01;
+   real_t grow_factor = 2.0;
 
    OptionsParser args(argc, argv);
    // args.AddOption(&mesh_file, "-m", "--mesh",
@@ -63,14 +63,12 @@ int main(int argc, char *argv[])
    args.AddOption(&order, "-o", "--order",
                   "Finite element order (polynomial degree) or -1 for"
                   " isoparametric space.");
-   args.AddOption(&ser_ref_levels, "-sr", "--ser-refine",
+   args.AddOption(&ser_ref_levels, "-rs", "--refine-serial",
                   "Number of times to serially refine the mesh uniformly.");
-   args.AddOption(&par_ref_levels, "-pr", "--par-refine",
+   args.AddOption(&par_ref_levels, "-rp", "--refine-parallel",
                   "Number of times to parallely refine the mesh uniformly.");
    args.AddOption(&device_config, "-d", "--device",
                   "Device configuration string, see Device::Configure().");
-   args.AddOption(&use_cudss, "-cudss", "--cudss-solver", "-no-cudss",
-                  "--no-cudss-solver", "Use the cuDSS Solver.");
    args.AddOption(&visualization, "-vis", "--visualization", "-no-vis",
                   "--no-visualization",
                   "Enable or disable GLVis visualization.");
@@ -189,13 +187,6 @@ int main(int argc, char *argv[])
    tX.SyncFromBlocks();
    tF.SyncFromBlocks();
 
-   // tX.HostRead();
-   // tF.HostRead();
-   // out << "primal_true:     " << tX.GetBlock(0).Norml2() << std::endl;
-   // out << "dual_true:       " << tX.GetBlock(1).Norml2() << std::endl;
-   // out << "primal_rhs_true: " << tF.GetBlock(0).Norml2() << std::endl;
-   // out << "dual_rhs_true:   " << tF.GetBlock(1).Norml2() << std::endl;
-
    ConstantCoefficient one_cf(1.0);
    CoefficientScaledLegendreFunction entropy(new Shannon, one_cf, obstacle);
    PGOperator pg_op(*A_h.As<HypreParMatrix>(), *B_h.As<HypreParMatrix>(),
@@ -203,12 +194,12 @@ int main(int argc, char *argv[])
    pg_op.SetDebug(debug);
 
    std::unique_ptr<Solver> linear_solver;
-   if (use_cudss && Device::Allows(Backend::CUDA_MASK))
+   if (Device::Allows(Backend::CUDA_MASK))
    {
 #ifdef MFEM_USE_CUDSS
       auto *cudss_solver = new CuDSSSolver(comm);
       cudss_solver->SetReorderingReuse(true);
-      cudss_solver->SetMatrixSymType(CuDSSSolver::MatType::NONSYMMETRIC);
+      cudss_solver->SetMatrixSymType(CuDSSSolver::SYMMETRIC_INDEFINITE);
       linear_solver.reset(cudss_solver);
 #endif
    }
@@ -216,9 +207,11 @@ int main(int argc, char *argv[])
    {
 #ifdef MFEM_USE_PETSC
       linear_solver.reset(new MUMPSSolver(comm));
-#else
-      MFEM_ABORT("Either GPU or SuiteSparse must be enabled");
 #endif
+   }
+   if (!linear_solver)
+   {
+      MFEM_ABORT("Either CuDSS or MUMPS must be enabled");
    }
 
    // 14. Send the solution by socket to a GLVis server.

@@ -11,7 +11,7 @@ private:
    FiniteElementSpace &fespace;
    Operator &A;
    Operator &B;
-   std::unique_ptr<Operator> neg_Bt;
+   std::unique_ptr<Operator> Bt;
    std::unique_ptr<BlockMatrix> pg_blockmat;
    const real_t &alpha;
    std::unique_ptr<PrimalCoefficient> primal_cf;
@@ -51,7 +51,7 @@ public:
    // psi_k <- psi = psi_k - alpha*lambda
    void ProxUpdate(const GridFunction &lambda)
    {
-      psi_k->Add(-alpha, lambda);
+      psi_k->Add(alpha, lambda);
       psi_k->SetTrueVector();
       psi_k->HostRead();
    }

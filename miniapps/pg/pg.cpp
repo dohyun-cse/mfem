@@ -31,9 +31,7 @@ PGOperator::PGOperator(Operator &A_,
    width=height=offsets.Last();
 
 
-   auto * neg_Bt_tmp = Transpose(static_cast<SparseMatrix&>(B));
-   *neg_Bt_tmp *= -1.0;
-   neg_Bt.reset(neg_Bt_tmp);
+   Bt.reset(Transpose(static_cast<SparseMatrix&>(B)));
 
    psi = std::make_unique<GridFunction>(&fespace_);
    *psi = 0.0; psi->SetTrueVector();
@@ -51,7 +49,7 @@ PGOperator::PGOperator(Operator &A_,
 
    pg_blockmat = std::make_unique<BlockMatrix>(offsets);
    pg_blockmat->SetBlock(0, 0, static_cast<SparseMatrix*>(&A));
-   pg_blockmat->SetBlock(0, 1, static_cast<SparseMatrix*>(neg_Bt.get()));
+   pg_blockmat->SetBlock(0, 1, static_cast<SparseMatrix*>(Bt.get()));
    pg_blockmat->SetBlock(1, 0, static_cast<SparseMatrix*>(&B));
    pg_blockmat->owns_blocks = false;
    H.SetType(Operator::MFEM_SPARSEMAT);
@@ -88,9 +86,7 @@ PGOperator::PGOperator(Operator &A_,
    offsets.PartialSum();
    width=height=offsets.Last();
 
-   auto neg_Bt_tmp = static_cast<HypreParMatrix&>(B).Transpose();
-   *neg_Bt_tmp *= -1.0;
-   neg_Bt.reset(neg_Bt_tmp);
+   Bt.reset(static_cast<HypreParMatrix&>(B).Transpose());
 
    psi = std::make_unique<ParGridFunction>(&fespace_);
    *psi = 0.0; psi->SetTrueVector();
@@ -110,8 +106,8 @@ PGOperator::PGOperator(Operator &A_,
 }
 #endif
 
-// Au - B^T lambda
-// Bu - grad R^*(psi^k - alpha*lambda)
+// Au + B^T lambda
+// Bu - grad R^*(psi^k + alpha*lambda)
 void PGOperator::Mult(const Vector &x, Vector &y) const
 {
    if (debug) { out << "PGOperator::Mult" << std::endl; }
@@ -122,7 +118,7 @@ void PGOperator::Mult(const Vector &x, Vector &y) const
 
    if (debug) { out << "PGOperator::Mult #1: latent update" << std::endl; }
    // psi = psi_k - alpha*lambda
-   add(psi_k->GetTrueVector(), -alpha, lambda, psi->GetTrueVector());
+   add(psi_k->GetTrueVector(), alpha, lambda, psi->GetTrueVector());
    psi->SetFromTrueVector();
    psi->HostRead(); // sync GPU → CPU before coefficient evaluation in Assemble()
 
@@ -141,9 +137,9 @@ void PGOperator::Mult(const Vector &x, Vector &y) const
    }
 
    if (debug) { out << "PGOperator::Mult #3: compute A*u - B^T*lambda" << std::endl; }
-   // res_u = A*u - B^T*lambda
+   // res_u = A*u + B^T*lambda
    A.Mult(u, res_u);
-   neg_Bt->AddMult(lambda, res_u);
+   Bt->AddMult(lambda, res_u);
 
    if (debug)
    {
@@ -200,14 +196,14 @@ Operator &PGOperator::GetGradient(const Vector &x) const
    Vector &lambda = X.GetBlock(1);
 
    if (debug) {out << "PGOperator::GetGradient #1: latent update" << std::endl; }
-   add(psi_k->GetTrueVector(), -alpha, lambda, psi->GetTrueVector());
+   add(psi_k->GetTrueVector(), alpha, lambda, psi->GetTrueVector());
    psi->SetFromTrueVector();
    psi->HostRead(); // sync GPU → CPU before coefficient evaluation in Assemble()
 
    if (debug) {out << "PGOperator::GetGradient #2: update dual Hessian" << std::endl; }
    dualhess->Update(); // no longer needed after this.
    dualhess->Assemble(false);
-   dualhess->SpMat() *= alpha;
+   dualhess->SpMat() *= -alpha;
    dualhess->FormSystemMatrix(latent_ess_tdof, H);
 
    if (debug) {out << "PGOperator::GetGradient #3: creating monolithic" << std::endl; }
@@ -216,7 +212,7 @@ Operator &PGOperator::GetGradient(const Vector &x) const
 #ifdef MFEM_USE_MPI
       Array2D<const HypreParMatrix*> blocks(2, 2);
       blocks(0, 0) = static_cast<const HypreParMatrix*>(&A);
-      blocks(0, 1) = static_cast<const HypreParMatrix*>(neg_Bt.get());
+      blocks(0, 1) = static_cast<const HypreParMatrix*>(Bt.get());
       blocks(1, 0) = static_cast<const HypreParMatrix*>(&B);
       blocks(1, 1) = H.As<HypreParMatrix>();
       pg_op.Reset(HypreParMatrixFromBlocks(blocks));
