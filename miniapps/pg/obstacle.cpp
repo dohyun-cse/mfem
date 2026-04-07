@@ -153,7 +153,7 @@ int main(int argc, char *argv[])
       auto * cudss_solver = new CuDSSSolver;
       cudss_solver->SetReorderingReuse(true);
       cudss_solver->SetMatrixSymType(CuDSSSolver::MatType::SYMMETRIC_INDEFINITE);
-      cudss_solver.SetMatrixViewType(CuDSSSolver::MatViewType::UPPER);
+      cudss_solver->SetMatrixViewType(CuDSSSolver::MatViewType::UPPER);
       linear_solver.reset(cudss_solver);
 #endif
    }
