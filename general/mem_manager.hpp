@@ -336,6 +336,11 @@ public:
        to be empty. */
    bool Empty() const { return h_ptr == NULL; }
 
+   /** @brief True when @a other shares this memory's host pointer (two views
+       over the same storage). Pointer comparison only — no validity checks,
+       no synchronization. */
+   bool PointsTo(const Memory &other) const { return h_ptr == other.h_ptr; }
+
    /** @brief Allocate host memory for @a size entries with the current host
        memory type returned by MemoryManager::GetHostMemoryType(). */
    /** @note The current memory is NOT deleted by this method. */

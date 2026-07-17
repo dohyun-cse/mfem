@@ -208,6 +208,14 @@ Vector &Vector::operator=(const Vector &v)
    UseDevice(v.UseDevice());
 #else
    SetSize(v.Size());
+   // Two views over the same storage (e.g. a GridFunction bound zero-copy
+   // onto a block of its true-dof vector): there is nothing to copy --
+   // reconcile this view's validity flags with the source's instead. Going
+   // through Write() + CopyFrom would (a) page-protect the shared storage
+   // under this record while the source record still claims it host-valid
+   // (SIGBUS under the debug backend), and (b) leave this record's flags
+   // pointing at a stale copy.
+   if (data.PointsTo(v.data)) { data.Sync(v.data); return *this; }
    const bool vuse = v.UseDevice();
    const bool use_dev = UseDevice() || vuse;
    if (use_dev != vuse) { v.UseDevice(use_dev); }

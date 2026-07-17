@@ -1233,6 +1233,19 @@ void MemoryManager::Copy_(void *dst_h_ptr, const void *src_h_ptr,
       (!(src_flags & Mem::VALID_DEVICE) ||
        ((dst_flags & Mem::VALID_HOST) && !(dst_flags & Mem::VALID_DEVICE)));
 
+   // Identical storage (e.g. two aliases over the same base range): there is
+   // nothing to move -- host and device buffers already coincide on both
+   // sides. Proceeding would read/write through one record's pointers under
+   // the other record's protection state (SIGBUS under the debug backend).
+   // The destination's validity must mirror the SOURCE's (that is where the
+   // shared data actually is), overriding the transfer-oriented update above.
+   if (dst_h_ptr == src_h_ptr)
+   {
+      dst_flags = (dst_flags & ~(Mem::VALID_HOST | Mem::VALID_DEVICE)) |
+                  (src_flags & (Mem::VALID_HOST | Mem::VALID_DEVICE));
+      return;
+   }
+
    const void *src_d_ptr =
       src_on_host ? NULL :
       ((src_flags & Mem::ALIAS) ?
@@ -1516,6 +1529,9 @@ void *MemoryManager::GetDevicePtr(const void *h_ptr, size_t bytes,
    if (copy_data)
    {
       MFEM_ASSERT(bytes <= mem.bytes, "invalid copy size");
+      // The HtoD below reads the host buffer, whose pages aliases might have
+      // protected as well -- lift the host protection symmetrically.
+      ctrl->Host(h_mt)->Unprotect(mem, mem.bytes);
       if (bytes) { ctrl->Device(d_mt)->HtoD(mem.d_ptr, h_ptr, bytes); }
    }
    ctrl->Host(h_mt)->Protect(mem, bytes);
@@ -1584,7 +1600,10 @@ void *MemoryManager::GetAliasHostPtr(const void *ptr, size_t bytes,
    void *alias_h_ptr = static_cast<char*>(mem->h_ptr) + alias.offset;
    void *alias_d_ptr = static_cast<char*>(mem->d_ptr) + alias.offset;
    MFEM_ASSERT(alias_h_ptr == ptr,  "internal error");
-   mem->h_rw = false;
+   // Arm BOTH gates: the device AliasProtect below leaves device pages
+   // protected, and a later base-level Unprotect must not be skipped
+   // (mirrors GetAliasDevicePtr's bookkeeping).
+   mem->h_rw = mem->d_rw = false;
    ctrl->Host(h_mt)->AliasUnprotect(alias_h_ptr, bytes);
    if (mem->d_ptr) { ctrl->Device(d_mt)->AliasUnprotect(alias_d_ptr, bytes); }
    if (copy_data && mem->d_ptr)
