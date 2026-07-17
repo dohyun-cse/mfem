@@ -1288,6 +1288,19 @@ void MemoryManager::Copy_(void *dst_h_ptr, const void *src_h_ptr,
          const MemoryType d_mt = known ?
                                  maps->memories.at(dst_h_ptr).d_mt :
                                  maps->aliases.at(dst_h_ptr).mem->d_mt;
+         // The source is host-valid per its flags, but another view of the
+         // same base may have left its pages protected -- lift the host
+         // protection before reading (same courtesy as GetDevicePtr's HtoD).
+         if (src_flags & Mem::ALIAS)
+         {
+            const internal::Alias &sa = maps->aliases.at(src_h_ptr);
+            ctrl->Host(sa.mem->h_mt)->AliasUnprotect(src_h_ptr, bytes);
+         }
+         else if (mm.IsKnown(src_h_ptr))
+         {
+            internal::Memory &sm = maps->memories.at(src_h_ptr);
+            ctrl->Host(sm.h_mt)->Unprotect(sm, sm.bytes);
+         }
          ctrl->Device(d_mt)->HtoD(dest_d_ptr, src_h_ptr, bytes);
       }
       else
