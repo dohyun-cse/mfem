@@ -99,9 +99,12 @@ void GPUBlasBatchedLinAlg::AddMult(const DenseTensor &A, const Vector &x,
    const auto op_A = tr ? MFEM_CU_or_HIP(BLAS_OP_T) : MFEM_CU_or_HIP(BLAS_OP_N);
    const auto op_B = MFEM_CU_or_HIP(BLAS_OP_N);
 
+   // lda is the physical leading dimension SizeI regardless of op; passing m
+   // misreads non-square blocks under Op::T.
+   const int lda = A.SizeI();
    const blasStatus_t status = MFEM_GPUBLAS_PREFIX(gemmStridedBatched)(
                                   GPUBlas::Handle(), op_A, op_B, m, k, n,
-                                  &alpha, d_A, m, m*n, d_x, n, n*k, &beta, d_y,
+                                  &alpha, d_A, lda, m*n, d_x, n, n*k, &beta, d_y,
                                   m, m*k, n_mat);
    MFEM_VERIFY(status == MFEM_BLAS_SUCCESS, "GPU BLAS error.");
 }
