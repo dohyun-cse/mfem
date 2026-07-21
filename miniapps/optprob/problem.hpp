@@ -131,11 +131,9 @@ class OptimProblem : public StackedOperator
       return obj_blk_idx;
    }
 
-   int AddConstraint(Operator *con, ConstType type, int con_idx=0)
+   int AddConstraint(Operator *con, ConstType type)
    {
       MFEM_VERIFY(!finalized, "Operator is finalized");
-      MFEM_VERIFY(con_idx >= 0, "Constraint index must be non-negative");
-      MFEM_VERIFY(con_idx < ops.size(), "Constraint index out of bounds");
       constraint_types.Append(type);
       return StackedOperator::AddOperator(con);
    }
@@ -151,7 +149,8 @@ class OptimProblem : public StackedOperator
       obj_loc_idx = obj_loc_idx_;
    }
 
-   real_t GetEnergy(const Vector &x) const
+   // @brief Evaluate the objective function at a given point x
+   real_t Objective(const Vector &x) const
    {
       MFEM_VERIFY(finalized, "Operator not finalized");
       aux_y.SetSize(ops[obj_blk_idx]->Height());
@@ -159,9 +158,11 @@ class OptimProblem : public StackedOperator
       return aux_y(obj_loc_idx);
    }
 
-   real_t Objective(const Vector &x) const
+   // @brief Evaluate the energy (objective function) at a given point x
+   // @note This replicates the NonlinearForm::GetEnergy interface.
+   real_t GetEnergy(const Vector &x) const
    {
-      return GetEnergy(x);
+      return Objective(x);
    }
 
    void Mult(const Vector &x, Vector &y) const override
