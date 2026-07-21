@@ -8,49 +8,57 @@ class StackedOperator : public Operator
 public:
    StackedOperator(int m=0): Operator(0, m), offset{0} {}
 
-   virtual int AddOperator(Operator &op)
+   // @brief Add an operator to the stack
+   // @param op The operator to add to the stack (ownership is transferred)
+   virtual int AddOperator(Operator *op)
    {
       MFEM_VERIFY(!finalized, "Operator is finalized");
-      MFEM_VERIFY(op.Width() == width, "Operator width inconsistent");
-      offset.Append(op.Height());
-      ops.Append(&op);
-      return ops.Size()-1;
+      MFEM_VERIFY(op, "Operator is null");
+      MFEM_VERIFY(op->Width() == width, "Operator width inconsistent");
+      offset.Append(op->Height());
+      ops.emplace_back(op);
+      return offset.Size()-1;
    }
 
+   // @brief Finalize the stack of operators and create the BlockOperator
    void Finalize()
    {
       MFEM_VERIFY(!finalized, "Operator already been finalized");
       offset.PartialSum();
       Array<int> col_offset({0, width});
       blk_op.reset(new BlockOperator(offset, col_offset));
-      for (int i=0; i<ops.Size(); i++)
+      for (size_t i=0; i<ops.size(); i++)
       {
-         blk_op->SetBlock(i, 0, ops[i]);
+         blk_op->SetBlock(i, 0, ops[i].get());
       }
    }
 
    bool IsFinalized() const { return finalized; }
 
+   // @brief Return a reference to the BlockOperator
    BlockOperator &AsBlockOperator() const
    {
       MFEM_VERIFY(finalized, "Operator not finalized");
       return *blk_op;
    }
 
+   // @brief Apply the stacked operator to a vector
    void Mult(const Vector &x, Vector &y) const override
    {
       MFEM_VERIFY(finalized, "Operator not finalized");
       blk_op->Mult(x, y);
    }
 
+   // @brief Return the gradient operator at a given point x
    Operator &GetGradient(const Vector &x) const override
    {
       MFEM_VERIFY(finalized, "Operator not finalized");
-      if (!grad_op) { grad_op.reset(new ProblemGradient(*this)); }
+      if (!grad_op) { grad_op.reset(new StackedGradient(*this)); }
       grad_op->SetPoint(x);
       return *grad_op;
    }
 
+   // @brief Return the gradient operator of the i-th operator at a given point x
    Operator &GetGradient(const int i, const Vector &x) const
    {
       MFEM_VERIFY(finalized, "Operator not finalized");
@@ -59,29 +67,42 @@ public:
 
 private:
 
-   class ProblemGradient : public Operator
+   class StackedGradient : public Operator
    {
    public:
-      ProblemGradient(const StackedOperator &prob)
+      StackedGradient(const StackedOperator &prob)
          : Operator(prob.Width(), prob.Width())
          , prob(prob)
-      {}
-      void SetPoint(const Vector &x) { x_ = x; }
-      void Mult(const Vector &x, Vector &y) const override
       {
-         //
+         x_.SetSize(prob.Width());
+         x_.UseDevice(true);
+         gi.SetSize(prob.Width());
+         gi.UseDevice(true);
+      }
+      void SetPoint(const Vector &x) { x_ = x; }
+      void Mult(const Vector &dx, Vector &df) const override
+      {
+         MFEM_VERIFY(dx.Size() == prob.Width(), "Input vector size mismatch");
+         df.SetSize(prob.Width());
+         df = 0.0;
+         for (size_t i=0; i<prob.ops.size(); i++)
+         {
+            prob.ops[i]->GetGradient(x_).Mult(dx, gi);
+            df += gi;
+         }
       }
    private:
       const StackedOperator &prob;
       Vector x_;
+      mutable Vector gi;
    };
+   mutable std::unique_ptr<StackedGradient> grad_op;
 
 protected:
    bool finalized = false;
    Array<int> offset;
-   Array<Operator *> ops;
+   std::vector<std::unique_ptr<Operator>> ops;
    std::unique_ptr<BlockOperator> blk_op;
-   mutable std::unique_ptr<ProblemGradient> grad_op;
 };
 
 class OptimProblem : public StackedOperator
@@ -92,35 +113,36 @@ class OptimProblem : public StackedOperator
       LE, // less than or equal constraint
    };
 
-   int AddOperator(Operator &op) override
+   int AddOperator(Operator *op) override
    {
-      MFEM_ABORT("Use SetObjective or AddConstraint to add operators to the optimization problem");
+      MFEM_ABORT("Use SetObjective or AddConstraint "
+                 "to add operators to the optimization problem");
       return -1;
    }
 
-   int SetObjective(Operator &obj, int obj_idx=0)
+   int SetObjective(Operator *obj, int obj_idx=0)
    {
       MFEM_VERIFY(!finalized, "Operator is finalized");
       MFEM_VERIFY(obj_blk_idx == -1, "Objective already set");
       MFEM_VERIFY(obj_idx >= 0, "Objective index must be non-negative");
-      MFEM_VERIFY(obj_idx < ops.Size(), "Objective index out of bounds");
+      MFEM_VERIFY(obj_idx < ops.size(), "Objective index out of bounds");
       obj_loc_idx = obj_idx;
       obj_blk_idx = StackedOperator::AddOperator(obj);
       return obj_blk_idx;
    }
 
-   int AddConstraint(Operator &con, ConstType type, int con_idx=0)
+   int AddConstraint(Operator *con, ConstType type, int con_idx=0)
    {
       MFEM_VERIFY(!finalized, "Operator is finalized");
       MFEM_VERIFY(con_idx >= 0, "Constraint index must be non-negative");
-      MFEM_VERIFY(con_idx < ops.Size(), "Constraint index out of bounds");
+      MFEM_VERIFY(con_idx < ops.size(), "Constraint index out of bounds");
       constraint_types.Append(type);
       return StackedOperator::AddOperator(con);
    }
 
    void UpdateObjectiveIndex(int obj_block, int obj_loc_idx_=0)
    {
-      MFEM_VERIFY(obj_block >= 0 && obj_block < ops.Size(),
+      MFEM_VERIFY(obj_block >= 0 && obj_block < ops.size(),
                   "Objective block index out of bounds");
       MFEM_VERIFY(obj_loc_idx_ >= 0, "Objective index must be non-negative");
       MFEM_VERIFY(obj_loc_idx_ < ops[obj_block]->Height(),
@@ -160,7 +182,6 @@ class OptimProblem : public StackedOperator
    void SetDofLowerBound(const Vector &lb)
    {
       MFEM_VERIFY(lb.Size() == width, "Lower bound size mismatch");
-      dof_lb.UseDevice(true);
       dof_lb.SetSize(width);
       dof_lb = lb;
    }
